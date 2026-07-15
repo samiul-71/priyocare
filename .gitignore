@@ -41,4 +41,7 @@ yarn-error.log*
 next-env.d.ts
 
 # Custom
-docs
+# Ignore local design docs (drafts, master PRD, logo, templates)...
+docs/*
+# ...but keep the committed module PRDs + design system
+!docs/modules/
