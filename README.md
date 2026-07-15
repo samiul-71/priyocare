@@ -1,36 +1,54 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# PriyoCare
 
-## Getting Started
+Trusted home healthcare in Dhaka — **one Next.js application, one repository, one deployment**. The customer website, caregiver PWA, office/admin panel, and the API all live here as route groups (PRD §4.1).
 
-First, run the development server:
+> **Framework note:** this is the latest Next.js (v16.2.10) + React 19, which differs from older versions. Read the relevant guide in `node_modules/next/dist/docs/` before writing framework code. Notably, **Middleware is now "Proxy"** (`proxy.ts`).
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Status
+
+**Module 01 — Design System & Application Foundation** is built. It establishes the contrast-safe token system, self-hosted fonts, the three actor shells, the boundary + accessibility CI gates, and the landing page. Everything else is specced in `docs/modules/` and built on top of this.
+
+## Documentation
+
+- `docs/modules/README.md` — module index and dependency-driven build order
+- `docs/modules/design.md` — the design system (colour, type, a11y) derived from the logo
+- `docs/modules/0X-*-prd.md` — one PRD per module
+- `docs/priyocare-prd.md` — the master PRD (kept local, gitignored)
+
+## Structure
+
+```
+app/
+├── layout.tsx            # root: metadata, viewport (zoom never blocked), fonts, lang="bn"
+├── fonts.ts              # self-hosted Hind Siliguri / Poppins / Inter (no runtime Google call)
+├── globals.css           # design tokens (@theme); default palette cleared so teal-500 can't be typed
+├── (customer)/           # public site, PWA scope "/"
+├── (caregiver)/          # field PWA, scope "/caregiver/"
+└── (office)/             # admin panel, desktop-first
+components/{ui,customer}/  # ui primitives + customer chrome
+lib/shared/               # framework-agnostic shared code (Zod schemas land here in module 09)
+proxy.ts                  # route-group auth gating skeleton (Next 16 "Proxy" = old Middleware)
+public/…manifest.webmanifest  # two path-scoped PWA manifests
+tests/a11y.spec.ts        # axe-core accessibility gate
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Commands
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run dev        # dev server
+npm run build      # production build
+npm run start      # serve production build
+npm run lint       # eslint + eslint-plugin-boundaries (cross-actor imports are errors)
+npm run test:a11y  # axe-core: fails on ANY serious/critical violation
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Guardrails (blocking, same severity as typecheck)
 
-## Learn More
+- **Module boundaries** (`eslint-plugin-boundaries`): `(customer)` may never import `components/office` or another group's code; `lib/server` is reachable only by the API. (PRD §4.2)
+- **Accessibility** (`@axe-core/playwright`): zero serious/critical violations on critical routes; contrast is contract, not preference. (PRD §17.9)
+- **Design tokens are closed**: the default Tailwind colour palette is cleared, so the failing brand teal can never be typed as text. (design.md §2)
 
-To learn more about Next.js, take a look at the following resources:
+## Ground rules
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Never push to `main`; work on `development` or feature branches.
+- Bangla is Unicode (UTF-8) everywhere — Bijoy/ANSI is rejected. (PRD §18.1)

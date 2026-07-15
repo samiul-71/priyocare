@@ -1,0 +1,20 @@
+{
+  "name": "PriyoCare — বাড়িতে স্বাস্থ্যসেবা",
+  "short_name": "PriyoCare",
+  "scope": "/",
+  "start_url": "/?src=pwa",
+  "display": "standalone",
+  "theme_color": "#012967",
+  "background_color": "#FFFFFF",
+  "lang": "bn",
+  "icons": [
+    { "src": "/icons/heart-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/heart-512.png", "sizes": "512x512", "type": "image/png" },
+    {
+      "src": "/icons/heart-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

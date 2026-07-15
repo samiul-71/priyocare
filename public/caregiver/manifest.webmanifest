@@ -1,0 +1,20 @@
+{
+  "name": "PriyoCare Caregiver",
+  "short_name": "PriyoCare কাজ",
+  "scope": "/caregiver/",
+  "start_url": "/caregiver/today?src=pwa",
+  "display": "standalone",
+  "theme_color": "#0A7B7A",
+  "background_color": "#FFFFFF",
+  "lang": "bn",
+  "icons": [
+    { "src": "/caregiver/icons/heart-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/caregiver/icons/heart-512.png", "sizes": "512x512", "type": "image/png" },
+    {
+      "src": "/caregiver/icons/heart-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

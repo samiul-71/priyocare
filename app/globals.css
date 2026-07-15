@@ -1,26 +1,91 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/*
+ * PriyoCare design tokens — the single source of truth in code.
+ * Mirrors docs/modules/design.md §2 (colour) and §3 (type).
+ *
+ * The default Tailwind colour palette is intentionally CLEARED
+ * (`--color-*: initial`) so nobody can type `text-teal-500` and quietly
+ * ship a contrast failure. Only the closed, contrast-checked set below
+ * exists. Make the wrong thing impossible to write. (design.md §2.2)
+ */
+@theme {
+  --color-*: initial;
+
+  --color-white: #ffffff;
+  --color-black: #000000;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+
+  /* Navy — structure, primary text, primary actions */
+  --color-navy: #012967;        /* 13.75:1 on white ✅ AAA */
+  --color-navy-800: #012f76;
+  --color-navy-100: #e6ebf2;
+  --color-navy-50: #f4f7fa;
+
+  /* Teal — split: brand teal is DECORATIVE ONLY; text uses the darks */
+  --color-teal-brand: #0d9b9a;  /* ⚠️ 3.49:1 — decorative / headings ≥24px bold only */
+  --color-teal-900: #086362;    /* 7.07:1 ✅ AAA */
+  --color-teal-800: #0a7b7a;    /* 5.09:1 on white ✅ — button fills */
+  --color-teal-700: #0b8383;    /* 4.58:1 ✅ — links, secondary text, icons */
+  --color-teal-50: #eaf7f7;
+
+  /* Semantic — each ≥4.5:1 on white; always paired with an icon + label */
+  --color-success: #15803d;
+  --color-warning: #b45309;
+  --color-danger: #b91c1c;
+
+  /* Neutrals */
+  --color-text: #1a202c;
+  --color-text-muted: #4a5568;  /* lightest grey permitted for text */
+  --color-border: #e2e8f0;
+  --color-surface: #ffffff;
+  --color-surface-alt: #f7fafc;
+
+  /* Type — self-hosted via next/font (see app/fonts.ts) */
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+  --font-bn: var(--font-hind), var(--font-inter), system-ui, sans-serif;
+  --font-display: var(--font-poppins), var(--font-inter), system-ui, sans-serif;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Base — no dark mode (out of scope, PRD §3.4) */
+html {
+  color: var(--color-text);
+  background: var(--color-surface);
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+/* Bangla renders +1px over Latin — conjuncts are denser (design.md §3) */
+:where([lang="bn"]) {
+  font-family: var(--font-bn);
+  font-size: 1.0625rem; /* 17px */
+  line-height: 1.6;
+}
+
+/* Prices, booking codes, any tabular number */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Focus is always visible — 2px teal-900 ring (design.md §5, §7) */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-teal-900);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
