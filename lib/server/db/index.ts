@@ -12,6 +12,11 @@ import * as schema from "./schema";
 let client: ReturnType<typeof postgres> | undefined;
 let dbSingleton: ReturnType<typeof drizzle<typeof schema>> | undefined;
 
+/** True when a database connection string is configured (i.e. on the VPS). */
+export function isDbConfigured(): boolean {
+  return !!process.env.DATABASE_URL;
+}
+
 export function getDb() {
   if (dbSingleton) return dbSingleton;
 

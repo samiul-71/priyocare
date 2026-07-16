@@ -1,0 +1,1 @@
+ALTER TABLE "bookings" ADD COLUMN "dispatch_override_reason" text;

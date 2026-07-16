@@ -97,7 +97,8 @@ The brand teal `#0D9B9A` is **3.49:1 on white — it fails WCAG AA (4.5:1) for t
 |---|---|
 | Primary text | `--text` (or `--navy` for headings) |
 | Secondary / helper text | `--text-muted` |
-| Links | `--teal-700` (underlined; never colour-only) |
+| Links (on white) | `--teal-700` (underlined; never colour-only) |
+| Links (on tinted bg: `surface-alt`/`teal-50`/`navy-50`) | `--teal-900` — `teal-700` is only 4.58:1 on **pure white** and drops to ~4.36:1 on `surface-alt`, failing AA. Use `teal-900` on any tinted surface. |
 | Primary button (fill / text) | `--navy` / white |
 | Secondary button (fill / text) | `--teal-800` / white |
 | Ghost / tertiary button | transparent / `--navy`, `--border` outline |

@@ -356,6 +356,8 @@ export const bookings = pgTable(
     createdByStaff: bigint("created_by_staff", { mode: "number" }).references(
       () => staffAccounts.id,
     ),
+    // Reason stored when Ops dispatches a non-top-ranked caregiver (AC 3.1).
+    dispatchOverrideReason: text("dispatch_override_reason"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

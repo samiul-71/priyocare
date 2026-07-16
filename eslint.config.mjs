@@ -35,9 +35,11 @@ const boundariesConfig = {
       {
         default: "disallow",
         policies: [
-          { from: { element: { types: "customer" } }, allow: { to: { element: { types: { anyOf: ["customer", "ui", "shared"] } } } } },
-          { from: { element: { types: "caregiver" } }, allow: { to: { element: { types: { anyOf: ["caregiver", "ui", "shared"] } } } } },
-          { from: { element: { types: "office" } }, allow: { to: { element: { types: { anyOf: ["office", "ui", "shared"] } } } } },
+          // Actor groups may import ui, shared, and server (server-only data
+          // loaders for server components). Cross-actor imports stay forbidden.
+          { from: { element: { types: "customer" } }, allow: { to: { element: { types: { anyOf: ["customer", "ui", "shared", "server"] } } } } },
+          { from: { element: { types: "caregiver" } }, allow: { to: { element: { types: { anyOf: ["caregiver", "ui", "shared", "server"] } } } } },
+          { from: { element: { types: "office" } }, allow: { to: { element: { types: { anyOf: ["office", "ui", "shared", "server"] } } } } },
           { from: { element: { types: "api" } }, allow: { to: { element: { types: { anyOf: ["api", "server", "shared"] } } } } },
           { from: { element: { types: "ui" } }, allow: { to: { element: { types: { anyOf: ["ui", "shared"] } } } } },
           { from: { element: { types: "shared" } }, allow: { to: { element: { types: "shared" } } } },
