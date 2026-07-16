@@ -217,6 +217,18 @@ export const staffAccounts = pgTable("staff_accounts", {
   passwordHash: text("password_hash").notNull(), // argon2id
   role: staffRole("role").notNull().default("ops"),
   isActive: boolean("is_active").notNull().default(true),
+  /**
+   * True while the password is the one an admin set — they necessarily know it,
+   * because they typed it or read it out. Same rule as `caregivers.pin_must_change`
+   * and for the same reason: staff hold MORE access than caregivers, not less.
+   */
+  passwordMustChange: boolean("password_must_change").notNull().default(false),
+  /**
+   * When the credential last changed. Sessions issued before this are refused —
+   * the page cookie is a stateless JWT with nothing to revoke server-side, so
+   * this timestamp is what ends a session opened with the old password.
+   */
+  passwordChangedAt: timestamp("password_changed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

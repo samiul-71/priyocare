@@ -9,6 +9,7 @@ import {
   opsAlerts,
   patientProfiles,
   services,
+  staffAccounts,
   zones,
 } from "../db/schema";
 import {
@@ -267,4 +268,41 @@ export async function getCaregiverDetail(caregiverId: number): Promise<Caregiver
     canActivate: activation.canActivate,
     missing: activation.missing,
   };
+}
+
+/* -------------------------------------------------------- staff accounts */
+
+export interface StaffRow {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  isActive: boolean;
+  /** True while the password is still the one an admin handed over. */
+  mustChangePassword: boolean;
+  createdAt: Date;
+}
+
+/**
+ * Who has access to the office panel. Admin-only (the page enforces it).
+ *
+ * There was no way to see this at all before — an admin panel that cannot
+ * answer "who can read every patient's address?" is missing something more
+ * basic than a feature. `password_hash` is never selected; `mustChangePassword`
+ * is the only credential-adjacent fact that leaves this layer.
+ */
+export async function listStaff(): Promise<StaffRow[]> {
+  if (!isDbConfigured()) return [];
+  return getDb()
+    .select({
+      id: staffAccounts.id,
+      name: staffAccounts.name,
+      email: staffAccounts.email,
+      role: staffAccounts.role,
+      isActive: staffAccounts.isActive,
+      mustChangePassword: staffAccounts.passwordMustChange,
+      createdAt: staffAccounts.createdAt,
+    })
+    .from(staffAccounts)
+    .orderBy(desc(staffAccounts.createdAt));
 }

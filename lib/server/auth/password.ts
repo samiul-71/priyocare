@@ -25,6 +25,27 @@ export function verifyPassword(storedHash: string, plaintext: string): Promise<b
 export const hashPin = hashPassword;
 export const verifyPin = verifyPassword;
 
+/**
+ * Mint a temporary staff password for an admin to hand over (§10.1).
+ *
+ * Random rather than admin-chosen: a human picking "Welcome123" for a colleague
+ * is the predictable failure, and this one is meant to live for minutes — the
+ * account is `password_must_change`, so it dies at her next sign-in.
+ *
+ * Ambiguous characters are left out because this gets read down a phone line;
+ * `randomInt` is rejection-sampled, so dropping them costs no uniformity.
+ */
+const HANDOVER_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"; // no i/l/o/0/1
+const HANDOVER_LENGTH = 16;
+
+export function generatePassword(): string {
+  let out = "";
+  for (let i = 0; i < HANDOVER_LENGTH; i++) {
+    out += HANDOVER_ALPHABET[randomInt(0, HANDOVER_ALPHABET.length)];
+  }
+  return out;
+}
+
 const PIN_LENGTH = 6;
 
 /**

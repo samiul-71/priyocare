@@ -22,12 +22,24 @@ Legend: ✅ complete · 🚧 in progress · ⬜ not started
 | 09 | API Layer | ✅ | `e8aeefa` | Booking idempotency, `GET /services`, sample scan, write limits, **office Bearer→cookie**, `docs/api.md` |
 | — | Force PIN change on first login | ✅ | `59e1cee` | Closes the admin-issued-PIN gap; revokes sessions predating the change |
 | — | PIN reset (Ops + self-service OTP) | ✅ | `56475f8` | `/caregiver/forgot-pin` + Ops reset; degrades honestly with no SMS provider |
+| — | Staff passwords: forced change, change, admin reset | ✅ | _pinned below_ | Closes the same gap for the accounts with the most access; `/office/staff` |
 
 ## Next up
 
 **All nine modules are built.** What remains is provider-blocked or tracked below: Redis (rate limits across processes + the scheduled jobs), the storage provider (report/document upload), the **SMS adapter** — now the only thing standing between the built self-service PIN reset and it working, since Ops-mediated reset covers the need today — and the payment gateway's webhook shape. Then §10.7's external pentest / OWASP pass.
 
-The largest remaining *code* gap is **staff password reset/rotation**: caregivers now have a forced first-login change and two reset routes; the people with the most access have none of it.
+Every credential in the system now has a forced first change and a reset route. The remaining code items in the TODO are smaller and independent.
+
+### Staff passwords — what's full vs. deferred
+
+Staff had **none** of what a caregiver has: passwords were set once by `db:create-staff` and never changed. No forced first change, no rotation, no reset. The people who can read every patient's address and every caregiver's file had less credential hygiene than the field staff — this closes that, by mirroring the caregiver design rather than inventing a second one.
+
+- **Full:** `password_must_change` + `password_changed_at` (migration 0004, **with a backfill** — every existing password was admin-set, so leaving them `false` would exempt exactly the accounts with the most access); `requireStaffPage` diverts every office page to `/office/change-password` until it is replaced; self-service change (current password proves the session is yours); **admin-only reset** of a colleague's forgotten password; and `/office/staff` — an admin panel that could not answer *"who can read every patient's address?"* was missing something more basic than a feature.
+- **The role gate is load-bearing:** reset is `admin` only, checked in the handler, the action, AND `resetStaffPassword`. An `ops` user resetting an admin's password is a straight privilege escalation — take the temp password, sign in as the admin, and the role system is decoration. **Self-reset is refused** (409): an admin who knows their password should *change* it; one who has forgotten it cannot use a route requiring a session anyway, so allowing it would only let a walked-up unlocked laptop mint a fresh admin credential silently.
+- **Password rules follow NIST, not folklore:** 12 characters, **no composition rules**. Length defends a hash; "one uppercase, one symbol" reliably produces `Password1!` and a sticky note. The only extra check is a short list of what everyone tries first — those are not a guess away, they are the first guess. Login keeps the old 8-char floor so existing accounts still work and the screen hints at nothing. Handover passwords are generated (16 chars, CSPRNG) with `i/l/o/0/1` omitted, because they get read down a phone line.
+- **Verified live:** the handover password diverts every office page to change-password; a wrong current password is refused; after the change the **old session 307s to login** and the old password 401s; **an `ops` user resetting the admin → 403**; self-reset → 409; admin resetting a colleague → 200 + must-change + their old password dead; `/office/staff` sends an `ops` user to `/office`, not the login screen — signed in, just not allowed. 13 unit tests.
+- **The rule caught its own author:** `db:create-staff` refused the dev password `dev-password-123` (it contains "password"). Working as intended, and a fair illustration of why the check is there.
+- **Deferred:** self-service forgot-password needs an **email provider** — see the TODO. Admin reset covers it today.
 
 ### PIN reset — what's full vs. deferred
 
@@ -124,7 +136,7 @@ The single list of what is left. Each module's own "full vs. deferred" section a
 
 ### 2. Code gaps — buildable now, nothing blocking
 
-- [ ] **Staff password reset / rotation.** *(biggest one.)* Staff passwords are admin-set by `db:create-staff` and never change — no forgot-password, no rotation, no forced first change. A caregiver now has a forced first-login change **and** two reset routes; the people with the **most** access — every patient address, every caregiver's file — have none of it.
+- [ ] **Staff forgot-password (self-service).** Needs an **email provider** — the one piece of the staff credential story still missing. A staff member who forgets their password today needs an admin to reset it (which works). Only bites if the sole admin forgets theirs: recovery is then `db:create-staff` on the VPS, which is a real answer but not a workflow.
 - [ ] **A missing `JWT_SECRET` silently signs everyone out.** `verifyPageSession`/`verifyAccessToken` catch *all* errors and return null, including the "JWT_SECRET must be set" throw — so a misconfigured deploy redirects every user to login instead of failing loudly. Fail fast at boot. (Same class as the SMS sender, which now throws — this one is still silent.)
 - [ ] **Reject a caregiver with a reason.** `verification_status` has `rejected` and nothing sets it — a failed police check has no recorded outcome today.
 - [ ] **`/caregiver` has no authenticated a11y pass.** The 8 office pages are scanned signed-in; the caregiver PWA is not, because it needs an approved caregiver row. Worth adding now that onboarding exists.
@@ -132,6 +144,7 @@ The single list of what is left. Each module's own "full vs. deferred" section a
 
 ### 3. Waiting on an external provider (§19)
 
+- [ ] **Email provider** — the only thing missing from the staff credential story: self-service forgot-password. Admin reset covers it today; the gap only bites if the *sole* admin forgets theirs (recovery: `db:create-staff` on the VPS).
 - [ ] **SMS adapter** — one `SmsSender` implementation. The self-service PIN reset and customer OTP login are built and tested behind the seam; they work the moment it lands. Ops-mediated reset covers the need until then. Set `SMS_PROVIDER_CONFIGURED=1` when wired.
 - [ ] **Redis** — rate limits currently use the in-memory limiter (correct for one process, wrong for several) and **three scheduled jobs are plain functions nothing calls**: `sweepDormantLeads` (§12.1), `flagMissedCheckIns` (§11), and the report-overdue sweep.
 - [ ] **Private storage** — blocks report upload/streaming (module 05), lead document upload (06), caregiver document scans (onboarding — Ops files a *reference* today), and care-log photos (07).

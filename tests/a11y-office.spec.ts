@@ -28,6 +28,8 @@ const officeRoutes = [
   "/office/bookings/new",
   "/office/leads",
   "/office/caregivers",
+  "/office/staff", // admin-only; the E2E account is an admin
+  "/office/change-password",
   "/office/catalog",
   "/office/alerts",
   "/office/complaints",

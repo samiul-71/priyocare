@@ -18,6 +18,7 @@ import {
   updateLead,
 } from "@/lib/server/leads/mutations";
 import { resetCaregiverPin } from "@/lib/server/caregiver/pin";
+import { resetStaffPassword } from "@/lib/server/auth/staff-password";
 import {
   createCaregiverSchema,
   dispatchSchema,
@@ -239,6 +240,46 @@ export async function resetPinAction(caregiverId: number): Promise<ActionResult<
   revalidatePath(`/office/caregivers/${caregiverId}/verify`);
   revalidatePath("/office/caregivers");
   return { ok: true, data: { pin: result.pin } };
+}
+
+/* ------------------------------------------------------------------ staff */
+
+/**
+ * Admin resets a colleague's forgotten password (§10.1).
+ *
+ * ADMIN ONLY — checked here AND again in `resetStaffPassword`. An `ops` user
+ * resetting an admin's password would be a straight privilege escalation: take
+ * the temp password, sign in as the admin, and the role system is decoration.
+ *
+ * Self-reset is refused (see resetStaffPassword): an admin who knows their
+ * password should change it; one who has forgotten it cannot use a route that
+ * requires being signed in anyway. Allowing it would just mean a walked-up
+ * unlocked laptop mints a fresh admin credential without anyone noticing.
+ */
+export async function resetStaffPasswordAction(
+  staffId: number,
+): Promise<ActionResult<{ password: string }>> {
+  const actor = await getStaffActor();
+  if (!actor) return SESSION_EXPIRED;
+  if (actor.role !== "admin") {
+    return { ok: false, error: "Only an admin can reset a colleague's password." };
+  }
+
+  const result = await resetStaffPassword(staffId, actor.staffId);
+  if (result.ok) {
+    revalidatePath("/office/staff");
+    return { ok: true, data: { password: result.password } };
+  }
+
+  return {
+    ok: false,
+    error:
+      result.reason === "self"
+        ? "You cannot reset your own password here — use Change password instead."
+        : result.reason === "inactive"
+          ? "That account is deactivated — reactivate it before resetting a password."
+          : "Staff account not found.",
+  };
 }
 
 /* ---------------------------------------------------------------- session */

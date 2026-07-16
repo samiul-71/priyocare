@@ -88,9 +88,57 @@ export type ChangePinInput = z.infer<typeof changePinSchema>;
 
 export const staffLoginSchema = z.object({
   email: z.string().trim().toLowerCase().email(),
+  // Login stays at the old floor: existing passwords must keep working, and the
+  // login screen must not hint at the rules anyway.
   password: z.string().min(8).max(200),
 });
 export type StaffLoginInput = z.infer<typeof staffLoginSchema>;
+
+/**
+ * A staff password someone CHOOSES (§10.1). Twelve characters, no composition
+ * rules — the NIST line, and the right one: length is what defends a hash,
+ * while "one uppercase, one symbol" reliably produces `Password1!` and a
+ * sticky note. The only extra check is a short list of the passwords everyone
+ * tries first, which are not a guess away — they are the first guess.
+ *
+ * Staff hold more access than caregivers: every patient address, every
+ * caregiver's file. This floor is higher than the 8 login accepts on purpose,
+ * and applies going forward.
+ */
+const OBVIOUS_PASSWORDS = [
+  "password",
+  "passw0rd",
+  "12345678",
+  "123456789",
+  "qwertyuiop",
+  "priyocare",
+  "letmein",
+  "welcome",
+  "admin",
+  "changeme",
+  "iloveyou",
+];
+
+export const newStaffPasswordSchema = z
+  .string()
+  .min(12, "Use at least 12 characters — length is what makes it hard to crack")
+  .max(200)
+  .refine(
+    (pw) => !OBVIOUS_PASSWORDS.some((bad) => pw.toLowerCase().includes(bad)),
+    "That contains a password everyone tries first — pick something else",
+  );
+
+/** Change your own password. The current one proves the session is yours. */
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, "Enter your current password"),
+    newPassword: newStaffPasswordSchema,
+  })
+  .refine((v) => v.currentPassword !== v.newPassword, {
+    message: "The new password must be different from the current one",
+    path: ["newPassword"],
+  });
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 
 // Refresh token may arrive in the body; the handler also accepts it from a header.
 export const refreshSchema = z.object({

@@ -26,6 +26,8 @@ Trusted home healthcare in Dhaka — **one Next.js application, one repository, 
 
 - **PIN reset** ✅ two routes, because they fail differently — a lost phone breaks OTP, a Saturday night breaks the office. **Ops-mediated** (`/office/caregivers/{id}/pin/reset`, works today, new PIN is must-change) and **self-service OTP** (`/caregiver/forgot-pin`, built behind the `SmsSender` seam — module 03's OTP service was already complete, only the provider adapter is missing). The request endpoint **always answers 200** so it can't become a directory of who works here. With no provider the page shows the hotline rather than a form that could never deliver. *(4 unit tests; verified live: Ops reset kills her live session, old PIN 401, Ops-issued PIN diverts to change-pin; self-service lands her straight on her job, wrong code 401, weak PIN 422, replayed code 401.)*
 
+- **Staff passwords: forced change, self-service change, admin reset** ✅ staff had **none** of what a caregiver has — set once by `db:create-staff`, never changed. Now: `password_must_change` diverts every office page to `/office/change-password` until the admin-set password is replaced; a self-service change; an **admin-only** reset of a colleague's forgotten password; and `/office/staff`, since an admin panel that can't answer "who can read every patient's address?" is missing something basic. 12 chars, **no composition rules** (NIST — length defends a hash; "one uppercase, one symbol" produces `Password1!` and a sticky note), plus a short list of what everyone tries first. *(13 unit tests. Verified live: an `ops` user resetting an admin → **403**; self-reset → 409; after a change the old session 307s to login and the old password 401s; `/office/staff` sends `ops` to `/office`, not login.)*
+
 See [`docs/modules/PROGRESS.md`](docs/modules/PROGRESS.md) for the ordered status of every module. Everything else is specced in `docs/modules/` and built on top of these.
 
 ### Auth architecture (module 03)
@@ -128,7 +130,8 @@ npm run db:generate # drizzle-kit: regenerate migration SQL from the schema (off
 npm run db:migrate  # apply migrations (needs DATABASE_URL)
 npm run db:seed     # seed zones/services/nursing variants (idempotent)
 npm run db:create-staff -- --email x@y.z --password '…' [--name N] [--role ops|admin]
-                    # provision a staff login — the bootstrap path, since §10.1 forbids self-registration
+                    # provision a staff login — the bootstrap path, since §10.1 forbids
+                    # self-registration. Min 12 chars; they must change it at first sign-in.
 ```
 
 ## Guardrails (blocking, same severity as typecheck)

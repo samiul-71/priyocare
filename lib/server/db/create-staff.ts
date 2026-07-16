@@ -13,6 +13,7 @@ import { parseArgs } from "node:util";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { hashPassword } from "../auth/password";
+import { newStaffPasswordSchema } from "../../shared/auth-schemas";
 import { staffAccounts } from "./schema";
 
 try {
@@ -25,7 +26,7 @@ const USAGE = `
 Usage: npm run db:create-staff -- --email <email> --password <pw> [--name <name>] [--role ops|admin]
 
   --email     required, unique
-  --password  required, min 8 chars (matches staffLoginSchema)
+  --password  required, min 12 chars. They must change it at first sign-in.
   --name      defaults to the email's local part
   --role      "ops" (default) or "admin"
 `;
@@ -43,8 +44,12 @@ async function main() {
 
   const { email, password, name, role } = values;
   if (!email || !password) throw new Error(`Missing --email or --password.\n${USAGE}`);
-  if (password.length < 8) throw new Error("Password must be at least 8 characters.");
   if (role !== "ops" && role !== "admin") throw new Error(`--role must be "ops" or "admin".`);
+
+  // Same floor as a chosen password — a handover credential that is weak for
+  // its first hour is still a weak credential on a real account.
+  const strength = newStaffPasswordSchema.safeParse(password);
+  if (!strength.success) throw new Error(strength.error.issues[0].message);
 
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL is not set.");
@@ -68,11 +73,16 @@ async function main() {
         email: normalisedEmail,
         passwordHash: await hashPassword(password),
         role,
+        // Whoever runs this knows the password they just typed. It is a
+        // handover credential, not their colleague's password (§10.1).
+        passwordMustChange: true,
+        passwordChangedAt: new Date(),
       })
       .returning({ id: staffAccounts.id, email: staffAccounts.email, role: staffAccounts.role });
 
     // The password is never echoed back — it is not logged anywhere (§10.4).
     console.log(`Created staff #${created.id}: ${created.email} (${created.role})`);
+    console.log("They must change this password at first sign-in.");
   } finally {
     await client.end();
   }

@@ -29,6 +29,13 @@
       "when": 1784235504619,
       "tag": "0003_rapid_carnage",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1784237729004,
+      "tag": "0004_lucky_terrax",
+      "breakpoints": true
     }
   ]
 }

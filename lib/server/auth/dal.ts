@@ -88,7 +88,12 @@ export interface StaffPageSession {
   role: StaffRole;
   name: string;
   email: string;
+  /** True while the password is the one an admin set — see requireStaffPage. */
+  mustChangePassword: boolean;
 }
+
+/** Alias kept for symmetry with `CaregiverActor`. */
+export type StaffActor = StaffPageSession;
 
 /**
  * Gate an office page. Redirects to /office/login unless the cookie is a valid
@@ -97,26 +102,18 @@ export interface StaffPageSession {
  * office home, not the login screen — they are signed in, just not allowed.
  */
 export const requireStaffPage = cache(async (role?: StaffRole): Promise<StaffPageSession> => {
-  const session = await getPageSession();
-  if (!session || session.st !== "staff") return toLogin("/office/login", "/office");
+  const staff = await getStaffActor();
+  if (!staff) return toLogin("/office/login", "/office");
 
-  const [staff] = await getDb()
-    .select({
-      id: staffAccounts.id,
-      role: staffAccounts.role,
-      name: staffAccounts.name,
-      email: staffAccounts.email,
-      isActive: staffAccounts.isActive,
-    })
-    .from(staffAccounts)
-    .where(eq(staffAccounts.id, Number(session.sub)))
-    .limit(1);
+  // An admin-set password is one an admin knows. Until it is replaced, the only
+  // office page reachable is the one that replaces it — same rule as a
+  // caregiver's Ops-issued PIN, and staff hold more access, not less.
+  if (staff.mustChangePassword) redirect("/office/change-password");
 
-  // Deactivated between login and now → the cookie is stale, treat as signed out.
-  if (!staff || !staff.isActive) return toLogin("/office/login", "/office");
+  // Signed in, just not allowed here — the office home, not the login screen.
   if (role && staff.role !== role) redirect("/office");
 
-  return { staffId: staff.id, role: staff.role, name: staff.name, email: staff.email };
+  return staff;
 });
 
 /**
@@ -131,7 +128,7 @@ export const requireStaffPage = cache(async (role?: StaffRole): Promise<StaffPag
  * Server Actions are POST-only and Next verifies Origin against Host, so the
  * cookie authorising them does not reopen CSRF.
  */
-export const getStaffActor = cache(async (): Promise<StaffPageSession | null> => {
+export const getStaffActor = cache(async (): Promise<StaffActor | null> => {
   const session = await getPageSession();
   if (!session || session.st !== "staff") return null;
 
@@ -142,13 +139,30 @@ export const getStaffActor = cache(async (): Promise<StaffPageSession | null> =>
       name: staffAccounts.name,
       email: staffAccounts.email,
       isActive: staffAccounts.isActive,
+      passwordMustChange: staffAccounts.passwordMustChange,
+      passwordChangedAt: staffAccounts.passwordChangedAt,
     })
     .from(staffAccounts)
     .where(eq(staffAccounts.id, Number(session.sub)))
     .limit(1);
 
+  // Deactivated between login and now → the cookie is stale, treat as signed out.
   if (!staff || !staff.isActive) return null;
-  return { staffId: staff.id, role: staff.role, name: staff.name, email: staff.email };
+
+  // Session predates the last password change → refused. Same mechanism as the
+  // caregiver PIN: nothing to revoke on a stateless cookie, so compare `iat`.
+  // One second of slack — `iat` is whole seconds, the timestamp is not.
+  if (staff.passwordChangedAt && session.iat !== undefined) {
+    if (session.iat * 1000 + 1000 < staff.passwordChangedAt.getTime()) return null;
+  }
+
+  return {
+    staffId: staff.id,
+    role: staff.role,
+    name: staff.name,
+    email: staff.email,
+    mustChangePassword: staff.passwordMustChange,
+  };
 });
 
 export interface CaregiverPageSession {

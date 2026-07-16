@@ -2,11 +2,16 @@
 
 import { headers } from "next/headers";
 import { verifyStaffCredentials } from "@/lib/server/auth/credentials";
-import { getCaregiverActor, setPageSessionCookie } from "@/lib/server/auth/dal";
+import { getCaregiverActor, getStaffActor, setPageSessionCookie } from "@/lib/server/auth/dal";
 import { beginLoginAttempt, finishLoginAttempt } from "@/lib/server/auth/rate-limit";
 import { changeCaregiverPin } from "@/lib/server/caregiver/pin";
+import { changeStaffPassword } from "@/lib/server/auth/staff-password";
 import { issueSession } from "@/lib/server/auth/sessions";
-import { changePinSchema, staffLoginSchema } from "@/lib/shared/auth-schemas";
+import {
+  changePasswordSchema,
+  changePinSchema,
+  staffLoginSchema,
+} from "@/lib/shared/auth-schemas";
 
 /**
  * Browser sign-in / sign-out (module 09).
@@ -54,6 +59,68 @@ export async function signInStaffAction(input: unknown): Promise<SignInResult> {
 // Sign-out lives in each actor's own group (see app/(office)/actions.ts): the
 // boundaries rule forbids components/office importing anything of type `auth`,
 // and that wall is worth more than the two lines it costs to keep.
+
+/* ---------------------------------------------- staff: change password */
+
+export type ChangePasswordActionResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Replace an admin-set password with one only she knows (§10.1).
+ *
+ * Same order, and the same reason, as the caregiver PIN change:
+ *   1. `changeStaffPassword` verifies the current password, writes the new
+ *      hash, stamps `password_changed_at`, and revokes every refresh token —
+ *      killing any session opened with the old password, hers included.
+ *   2. we re-issue her cookie immediately.
+ * Revoke-then-readmit. Re-admitting only the person who just proved they know
+ * the current password is what makes the change mean anything.
+ */
+export async function changeStaffPasswordAction(
+  input: unknown,
+): Promise<ChangePasswordActionResult> {
+  const staff = await getStaffActor();
+  if (!staff) return { ok: false, error: "Sign in again to change your password." };
+
+  const parsed = changePasswordSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Check the password." };
+  }
+
+  // A wrong current password here is a guess against a live credential —
+  // throttled on the same keys as login, so this is not a softer door.
+  const identityKey = `login:email:${staff.email}`;
+  const ip = (await headers()).get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const ipKey = `login:ip:${ip}`;
+  const throttle = await beginLoginAttempt(identityKey, ipKey);
+  if (!throttle.allowed) {
+    return { ok: false, error: "Too many attempts. Wait a few minutes and try again." };
+  }
+
+  const result = await changeStaffPassword(
+    staff.staffId,
+    parsed.data.currentPassword,
+    parsed.data.newPassword,
+  );
+  await finishLoginAttempt(identityKey, ipKey, result.ok);
+
+  if (!result.ok) {
+    return {
+      ok: false,
+      error:
+        result.reason === "wrong_password"
+          ? "Your current password is wrong."
+          : "Sign in again to change your password.",
+    };
+  }
+
+  // Re-admit her with a cookie issued after `password_changed_at`.
+  await setPageSessionCookie({
+    sub: String(staff.staffId),
+    st: "staff",
+    role: staff.role,
+  });
+  return { ok: true };
+}
 
 /* ------------------------------------------------- caregiver: change PIN */
 
