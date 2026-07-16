@@ -25,6 +25,8 @@ const routes = [
   "/book/nursing/select",
   "/book/checkout",
   "/book/confirmation",
+  "/bookings/1/track",
+  "/bookings/1/status",
   "/caregiver",
 ];
 
