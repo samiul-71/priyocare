@@ -29,6 +29,8 @@ const routes = [
   "/book/confirmation",
   "/bookings/1/track",
   "/bookings/1/status",
+  "/enquiry/medical-tourism",
+  "/enquiry/health-insurance",
 ];
 
 for (const route of routes) {

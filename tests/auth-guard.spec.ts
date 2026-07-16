@@ -18,6 +18,7 @@ const guarded = [
   { path: "/office/bookings", login: "/office/login" },
   { path: "/office/bookings/new", login: "/office/login" },
   { path: "/office/bookings/1/assign", login: "/office/login" },
+  { path: "/office/leads", login: "/office/login" },
   { path: "/office/catalog", login: "/office/login" },
   { path: "/office/alerts", login: "/office/login" },
   { path: "/office/complaints", login: "/office/login" },
@@ -59,4 +60,17 @@ test("guard: login screens render instead of looping", async ({ page }) => {
 test("customer booking stays public — guest booking is the point (Flow A)", async ({ page }) => {
   await page.goto("/book/checkout");
   await expect(page).toHaveURL(/\/book\/checkout$/);
+});
+
+// Flow C's front door: an enquiry must never sit behind a login.
+test("the enquiry form stays public", async ({ page }) => {
+  await page.goto("/enquiry/medical-tourism");
+  await expect(page).toHaveURL(/\/enquiry\/medical-tourism$/);
+  await expect(page.getByRole("heading", { name: "Medical Tourism" })).toBeVisible();
+});
+
+// /enquiry only exists for lead-archetype services (§11).
+test("a non-lead service has no enquiry page", async ({ page }) => {
+  const res = await page.goto("/enquiry/nursing");
+  expect(res?.status()).toBe(404);
 });

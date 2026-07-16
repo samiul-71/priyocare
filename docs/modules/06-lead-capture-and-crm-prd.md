@@ -146,6 +146,7 @@ A lead quiet for 30 days auto-moves to `dormant` and is surfaced weekly for a re
 
 - [ ] Mental-health crisis protocol + note encryption before any session (§10.6).
 - [ ] Document-storage retention for lead attachments.
+- [ ] **Lead owner assignment rule.** Flow C says a new lead lands "+ owner", but nothing here says who — round-robin, by service, by shift? As built, `owner_id` is null and the board shows "Unassigned"; `next_action_at` is set to +24h so an unclaimed lead still surfaces as overdue rather than resting at `new`. Needs an Ops decision before launch.
 
 ---
 

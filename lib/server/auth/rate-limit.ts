@@ -48,6 +48,10 @@ export const RATE_LIMITS = {
   otpPerIp: { limit: 20, windowMs: 15 * 60_000 },
   loginPerIp: { limit: 10, windowMs: 5 * 60_000 },
   writePerAccount: { limit: 60, windowMs: 60_000 },
+  // Public, unauthenticated enquiry form (§10.3). Loose enough for a family
+  // enquiring about several services in one sitting, tight enough that a bot
+  // cannot bury the Ops board.
+  leadsPerIp: { limit: 5, windowMs: 10 * 60_000 },
 } as const;
 
 /** Default process-wide limiter. */

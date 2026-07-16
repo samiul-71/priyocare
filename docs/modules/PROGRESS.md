@@ -14,14 +14,21 @@ Legend: ✅ complete · 🚧 in progress · ⬜ not started
 | 04 | Customer Booking (visit) | ✅ | `bc75b6b` | Price integrity, race-safe slots, refund tiers, webhook HMAC; `/book/*` select→checkout→confirmation |
 | 05 | Customer Tracking & Reports | ✅ | `eec3cbd` | Status steppers (colour-independent), 15-min signed report links, geofence invisibility; `/bookings/[id]/track` + `/status` |
 | — | Page auth guards + login pages | ✅ | _this commit_ | `pc_session` cookie, DAL guards on every `/office` + `/caregiver` page, `/office/login` + `/caregiver/login` |
-| 06 | Lead Capture & CRM (lead) | ⬜ | — | Depends on 02, 03 — **next** |
+| 06 | Lead Capture & CRM (lead) | ✅ | _this commit_ | `/enquiry/[service]` + `/office/leads` Kanban, overdue pinning, 30-day dormancy, archetype gate |
 | 07 | Caregiver PWA (offline-first) | ⬜ | — | Depends on 02, 03 |
 | 09 | API Layer | ⬜ | — | Route handlers consolidated; partly built alongside 03/04/08 |
 
 ## Next up
 
-**Now:** Module 06 — Lead Capture & CRM (lead archetype): `/enquiry/[service]` + `/office/leads` Kanban, overdue follow-ups, 30-day dormancy. The new `/office/leads` page must call `requireStaffPage()` like every other office page.
-**After 06:** 07 (Caregiver PWA), folding shared route handlers into 09 as they land.
+**Now:** Module 07 — Caregiver PWA (offline-first): `/caregiver/today`, IndexedDB queue, sync, care log. The composition to get right is §10.1 Flow A — writes queue regardless of auth state; the page guard already never reads the access token, so it cannot break the rule.
+**After 07:** 09 (API layer) — fold the route handlers built alongside 03/04/06/08 into one consolidated surface, and take the localStorage-Bearer refactor with it.
+
+### Module 06 — what's full vs. deferred
+
+- **Full:** pure pipeline logic (`lib/shared/leads.ts` — overdue, dormancy, stage rules, Kanban ordering) with 20 unit tests; `POST /api/v1/leads` (public, rate-limited 5/10min, **archetype-gated** → 422 for a non-`lead` service); `PATCH /api/v1/office/leads/{id}` (staff-gated; stage change + activity in one transaction → 409 on reopen/missing lost reason, 404 unknown, 422 empty patch); `/enquiry/[service]` public form (lead services only; a non-lead slug 404s); `/office/leads` Kanban with overdue pinning, duplicate-phone surfacing, and a dormant shelf; `sweepDormantLeads` for the §12.1 job.
+- **Design notes:** stage rules are permissive about ORDER (Ops skips steps; a board that fights them gets worked around) but strict about the two moves that lose information — reopening a closed lead, and marking lost without a reason. The Kanban uses a `<select>` + button, not drag-and-drop: dragging is the part of a Kanban that fails keyboard and screen-reader users, and the board's job is making the next action obvious. Duplicates are computed at query time, never stored — a repeat caller is a fact about current data, and a stored flag goes stale the moment the other lead closes.
+- **Deferred:** **document upload** — `documents` accepts a storage KEY, never a caller-supplied URL, and the form submits none until private storage + signed access exist (§11, §19); a medical report must not be attachable before it has somewhere private to land. **`sweepDormantLeads` is not scheduled** — it is a plain function until BullMQ/Redis is on the VPS (§3.4). **Mental Health** enquiries are captured (S-3) but the service stays off-platform until Phase 3 (§10.6) — crisis protocol + note encryption first.
+- **Open question raised:** Flow C says a new lead lands "+ owner", but no PRD rule says WHO. Rather than invent a round-robin, `ownerId` stays null and the Kanban shows "Unassigned" — with `next_action_at` set to +24h, so an unclaimed lead surfaces as overdue tomorrow instead of resting at `new` forever. Needs an assignment rule.
 
 ### Page auth guards — what's full vs. deferred
 
