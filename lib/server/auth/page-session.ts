@@ -51,6 +51,12 @@ export interface PageSessionClaims {
   st: SubjectType;
   /** role claim — staff only (§10.1) */
   role?: StaffRole;
+  /**
+   * Issued-at, seconds. This cookie is a stateless JWT, so there is no server
+   * record to revoke; comparing `iat` against the moment a credential changed
+   * is what invalidates a session issued before it (see dal.ts).
+   */
+  iat?: number;
 }
 
 export function sessionTtlSeconds(subjectType: SubjectType): number {
@@ -91,7 +97,12 @@ export async function verifyPageSession(
       return null;
     }
     const role = payload.role as StaffRole | undefined;
-    return { sub: payload.sub, st, ...(role ? { role } : {}) };
+    return {
+      sub: payload.sub,
+      st,
+      ...(role ? { role } : {}),
+      ...(typeof payload.iat === "number" ? { iat: payload.iat } : {}),
+    };
   } catch {
     return null;
   }

@@ -32,6 +32,10 @@ const guarded = [
   { path: "/caregiver/today/care-log", login: "/caregiver/login" },
 ];
 
+// Not in the list above: it redirects to /caregiver/login WITHOUT a ?next=,
+// because the guard points *at* this page — see the dedicated test below.
+const CHANGE_PIN = "/caregiver/change-pin";
+
 for (const { path, login } of guarded) {
   test(`guard: ${path} is not viewable signed out`, async ({ page }) => {
     await page.goto(path);
@@ -66,6 +70,16 @@ test("guard: login screens render instead of looping", async ({ page }) => {
 test("customer booking stays public — guest booking is the point (Flow A)", async ({ page }) => {
   await page.goto("/book/checkout");
   await expect(page).toHaveURL(/\/book\/checkout$/);
+});
+
+/**
+ * The change-PIN screen is not public — it just cannot sit behind the guard
+ * that redirects to it, or that guard would point at itself forever. It sits in
+ * the (auth) group and checks the session itself.
+ */
+test("guard: the change-PIN screen is not viewable signed out", async ({ page }) => {
+  await page.goto(CHANGE_PIN);
+  await expect(page).toHaveURL(/\/caregiver\/login/);
 });
 
 // Flow C's front door: an enquiry must never sit behind a login.

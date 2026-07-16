@@ -22,6 +22,13 @@
       "when": 1784233773364,
       "tag": "0002_flawless_agent_zero",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1784235504619,
+      "tag": "0003_rapid_carnage",
+      "breakpoints": true
     }
   ]
 }

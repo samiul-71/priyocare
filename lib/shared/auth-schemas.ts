@@ -32,6 +32,48 @@ export const caregiverLoginSchema = z.object({
 });
 export type CaregiverLoginInput = z.infer<typeof caregiverLoginSchema>;
 
+/**
+ * PINs a caregiver may CHOOSE (§12.2). Ops-issued PINs are random; these are
+ * picked by a tired person under mild pressure, so the obvious ones get
+ * refused — and only the obvious ones.
+ *
+ * A 4–6 digit PIN has little entropy either way; what argon2id and the
+ * per-identity login limit defend is the whole keyspace. The point of this rule
+ * is narrower and worth it: "1234" and "0000" are not a random guess away, they
+ * are the FIRST guess. Beyond that, rejecting more just teaches people to write
+ * their PIN on the phone case.
+ */
+const TRIVIAL_PIN = /^(\d)\1*$/; // 0000, 111111 — every digit the same
+
+function isSequential(pin: string): boolean {
+  // Zod runs every refinement even when `.regex` above already failed, so this
+  // still sees "" and "4" — it must not assume a well-formed PIN.
+  if (pin.length < 2) return false;
+  const step = (a: string, b: string) => b.charCodeAt(0) - a.charCodeAt(0);
+  const first = step(pin[0], pin[1]);
+  if (first !== 1 && first !== -1) return false; // 1234… or 4321…
+  return [...pin].every((d, i) => i === 0 || step(pin[i - 1], d) === first);
+}
+
+export const newPinSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{4,6}$/, "PIN is 4–6 digits")
+  .refine((pin) => !TRIVIAL_PIN.test(pin), "Do not use the same digit repeated")
+  .refine((pin) => !isSequential(pin), "Do not use a run like 1234");
+
+/** Change PIN (first login, §12.2). The current PIN proves it is her. */
+export const changePinSchema = z
+  .object({
+    currentPin: z.string().trim().regex(/^\d{4,6}$/, "PIN is 4–6 digits"),
+    newPin: newPinSchema,
+  })
+  .refine((v) => v.currentPin !== v.newPin, {
+    message: "The new PIN must be different from the current one",
+    path: ["newPin"],
+  });
+export type ChangePinInput = z.infer<typeof changePinSchema>;
+
 export const staffLoginSchema = z.object({
   email: z.string().trim().toLowerCase().email(),
   password: z.string().min(8).max(200),

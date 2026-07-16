@@ -239,7 +239,13 @@ export async function issueCaregiverPin(caregiverId: number): Promise<IssuePinRe
   const pin = generatePin();
   await db
     .update(caregivers)
-    .set({ pinHash: await hashPin(pin) })
+    .set({
+      pinHash: await hashPin(pin),
+      // Ops is about to read this out, so they know it. She cannot reach any
+      // screen but /caregiver/change-pin until she replaces it (§12.2).
+      pinMustChange: true,
+      pinChangedAt: new Date(),
+    })
     .where(eq(caregivers.id, caregiverId));
 
   return { ok: true, pin };

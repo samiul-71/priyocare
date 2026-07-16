@@ -18,10 +18,20 @@ Legend: ✅ complete · 🚧 in progress · ⬜ not started
 | 07 | Caregiver PWA (offline-first) | ✅ | `5cd3778` | IndexedDB queue, idempotent sync, advisory geofence, service worker; `/caregiver/today` + tasks/scan/care-log |
 | — | Caregiver onboarding (unblocks 07) | ✅ | `a15dc0b` | Intake → checklist → payout → activate → **PIN issuance**; `/office/caregivers` + `/[id]/verify` |
 | 09 | API Layer | ✅ | `e8aeefa` | Booking idempotency, `GET /services`, sample scan, write limits, **office Bearer→cookie**, `docs/api.md` |
+| — | Force PIN change on first login | ✅ | _pinned below_ | Closes the admin-issued-PIN gap; revokes sessions predating the change |
 
 ## Next up
 
-**All nine modules are built.** What remains is provider-blocked or tracked below: Redis (rate limits + the scheduled jobs), the storage provider (report/document upload), the SMS/OTP provider (which also closes the admin-issued-PIN trade-off), and the payment gateway's webhook shape. Then §10.7's external pentest / OWASP pass.
+**All nine modules are built.** What remains is provider-blocked or tracked below: Redis (rate limits + the scheduled jobs), the storage provider (report/document upload), the SMS/OTP provider (now needed only for **PIN reset**, not the first-login change), and the payment gateway's webhook shape. Then §10.7's external pentest / OWASP pass.
+
+### Force PIN change on first login — what's full vs. deferred
+
+Closes the trade-off onboarding recorded: the initial PIN is read out by Ops, so for a moment someone else knows a caregiver's credential. **This did not need SMS** — that is only required for *reset*. The distinction was worth making: it moved a real security gap out of "provider-blocked" and into "done".
+
+- **Full:** `pin_must_change` + `pin_changed_at` (migration 0003, **with a backfill** — every PIN that existed was Ops-issued, so defaulting them to `false` would have exempted exactly the caregivers this protects); `requireCaregiverPage` diverts every caregiver page to `/caregiver/change-pin` until she replaces it; the change screen lives in `(auth)`, outside the guard that points at it (the login-loop rule again); a chosen PIN cannot be a repeated digit or a run like 1234 — the *first* guesses, not a general strength regime, since more rules just move the PIN onto the phone case. 9 unit tests.
+- **The half that is easy to miss:** changing the PIN must **revoke what the old one opened**, or the change is theatre. Refresh tokens are rows → revoked outright. The page cookie is a stateless JWT with nothing to revoke → `pin_changed_at` is stamped and the guard refuses any session whose `iat` precedes it. Verified live by actually doing the attack: **Ops signed in as her with the issued PIN, she changed it, and Ops' cookie → 307 to login while their refresh token → 401.** Old PIN 401, new PIN 200 into her job.
+- **§10.1 is not violated:** the rule is that TOKEN EXPIRY must never wall off a working shift. This is one-time setup on a brand-new account, before any work exists — her queue is empty by definition, because she could not open the app until now.
+- **Deferred:** **PIN reset** (forgot PIN) needs the SMS/OTP fallback — see the follow-up above. Staff passwords have no equivalent flow either; they are admin-set at creation and never rotated.
 
 ### Module 09 — what's full vs. deferred
 
@@ -89,7 +99,8 @@ Closed the gap where `/office/*` and `/caregiver/*` pages were viewable by anyon
 
 - [x] **Page-level auth guards + login pages** — done (see above). Customer `/book/*` stays intentionally public (guest booking, Flow A).
 - [x] **Caregiver onboarding** — done (see above). The PIN is only ever set on a caregiver who passes the full §12.2 gate.
-- [ ] **Change PIN on first login + PIN reset.** The initial PIN is admin-issued, so Ops knows it until she changes it — and today there is no way to change it. Needs the SMS/OTP provider (§10.1 fallback, §19). Until then an Ops user could log in as a caregiver they onboarded, which is exactly the kind of thing the geofence-invisibility and complaint rules assume cannot happen quietly.
+- [x] **Change PIN on first login** — done (see below). It turned out **not** to need SMS: that is only required for *reset* (forgot PIN), which is still open.
+- [ ] **PIN reset (forgot PIN).** Needs the SMS/OTP provider (§10.1's fallback, §19). Today a caregiver who forgets her PIN has no route back in — Ops cannot look it up (nothing stores it) and re-issue is refused while one exists. The honest interim answer is that Ops clears `pin_hash` in the database, which is not a workflow anyone should rely on.
 - [ ] **Reject a caregiver with a reason.** `verification_status` has `rejected` and nothing sets it — a failed police check currently has no recorded outcome.
 - [x] **Get Bearer tokens out of the browser** — done for the office (Server Actions). The caregiver PWA keeps one by necessity; see `lib/shared/client-tokens.ts`. The office forms keep the access + refresh pair in `localStorage` (`lib/shared/client-tokens.ts`) because `/api/v1/office/*` authenticates with Bearer headers. Any XSS on the origin can read them; the page cookie is httpOnly and cannot. The real fix is to make office mutations **Server Actions authorised by the cookie**, leaving Bearer for genuine API clients — a module 09 refactor, since it changes every office handler's entry point.
 - [ ] **A missing `JWT_SECRET` silently signs everyone out.** `verifyPageSession`/`verifyAccessToken` catch *all* errors and return null, including the "JWT_SECRET must be set" throw — so a misconfigured deploy would redirect every user to login rather than failing loudly. Fail fast at boot instead (pre-existing in `tokens.ts`; the page session inherits it).

@@ -22,6 +22,8 @@ Trusted home healthcare in Dhaka — **one Next.js application, one repository, 
 
 - **Module 09 — API Layer** ✅ closed the four real gaps in the §8 surface: **`POST /bookings` idempotency** (`Idempotency-Key` → a retry returns the original instead of taking a second slot and a second payment), **`GET /services`** (real ids — the phone form used to guess them from seed order), **`POST /samples/{barcode}/scan`**, and per-account **write rate limits** on all 14 write handlers. Also **removed Bearer tokens from the office browser** — pages mutate through cookie-authorised Server Actions, so there is no API credential in the page to steal. Full surface documented in [`docs/api.md`](docs/api.md). *(Verified live: the same idempotency key three times → one booking/payment/item; browser sign-in through the action stores no token; login throttling reworked — see below.)*
 
+- **Force PIN change on first login** ✅ closes the admin-issued-PIN gap: Ops reads the initial PIN out, so until she replaces it they know her credential. Every caregiver page now diverts to `/caregiver/change-pin` until she does. Crucially, the change **revokes what the old PIN opened** — refresh tokens outright, and the stateless page cookie via a `pin_changed_at` stamp the guard compares against the session's `iat`. *(9 unit tests. Verified by performing the attack: Ops signed in as her with the issued PIN, she changed it, Ops' cookie → login and their refresh token → 401; old PIN 401, new PIN 200.)*
+
 See [`docs/modules/PROGRESS.md`](docs/modules/PROGRESS.md) for the ordered status of every module. Everything else is specced in `docs/modules/` and built on top of these.
 
 ### Auth architecture (module 03)

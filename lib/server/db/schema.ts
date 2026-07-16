@@ -267,7 +267,21 @@ export const caregivers = pgTable(
     verificationStatus: verificationStatus("verification_status")
       .notNull()
       .default("pending"),
-    pinHash: text("pin_hash"), // set at interview step; null before approval
+    pinHash: text("pin_hash"), // set at activation; null before approval (§12.2)
+    /**
+     * True while the PIN is the one OPS issued. Ops necessarily knows it — they
+     * read it out — so the caregiver is forced to replace it before she can do
+     * anything, and after that nobody but her knows her credential.
+     */
+    pinMustChange: boolean("pin_must_change").notNull().default(false),
+    /**
+     * When the credential last changed. Sessions issued BEFORE this are stale
+     * and refused: a page-session cookie is a stateless JWT and cannot be
+     * revoked server-side, so this timestamp is what invalidates one. Without
+     * it, an Ops user who signed in with the initial PIN would keep a 30-day
+     * session after she changed it — which would defeat the whole point.
+     */
+    pinChangedAt: timestamp("pin_changed_at", { withTimezone: true }),
     bkashPayoutNumber: varchar("bkash_payout_number", { length: 15 }),
     zones: jsonb("zones").notNull().default(sql`'[]'::jsonb`),
     ratingAvg: numeric("rating_avg", { precision: 3, scale: 2 }).notNull().default("0"),

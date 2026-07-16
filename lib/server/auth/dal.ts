@@ -168,23 +168,68 @@ export interface CaregiverPageSession {
  * way: this guard gates rendering, not the offline queue (module 07).
  */
 export const requireCaregiverPage = cache(async (): Promise<CaregiverPageSession> => {
+  const caregiver = await getCaregiverActor();
+  if (!caregiver) return toLogin("/caregiver/login", "/caregiver");
+
+  /*
+   * The PIN Ops issued is a credential Ops knows — they read it out. Until she
+   * replaces it, the only page she may reach is the one that replaces it.
+   *
+   * This does NOT violate §10.1's "never a login wall": that rule is about
+   * TOKEN EXPIRY blocking a working shift. This is a one-time setup step on a
+   * brand-new account, before any work exists — her IndexedDB queue is empty by
+   * definition, because she has never been able to open the app before now.
+   */
+  if (caregiver.mustChangePin) redirect("/caregiver/change-pin");
+
+  return { caregiverId: caregiver.caregiverId, name: caregiver.name };
+});
+
+export interface CaregiverActor extends CaregiverPageSession {
+  mustChangePin: boolean;
+}
+
+/**
+ * The caregiver behind the cookie, or null. Returns rather than redirects, so
+ * the change-PIN screen and its Server Action can use it without bouncing.
+ *
+ * Three ways to be null, all of which must invalidate a live cookie:
+ *   - no/!caregiver session
+ *   - not `approved` — suspension revokes refresh tokens (Flow C), and it has
+ *     to revoke page access too or a suspended caregiver keeps browsing
+ *   - the session PREDATES the last credential change — the cookie is a
+ *     stateless JWT with nothing to revoke server-side, so `iat` vs
+ *     `pin_changed_at` is what ends an Ops session created with the initial PIN
+ */
+export const getCaregiverActor = cache(async (): Promise<CaregiverActor | null> => {
   const session = await getPageSession();
-  if (!session || session.st !== "caregiver") return toLogin("/caregiver/login", "/caregiver");
+  if (!session || session.st !== "caregiver") return null;
 
   const [caregiver] = await getDb()
     .select({
       id: caregivers.id,
       name: caregivers.fullName,
       verificationStatus: caregivers.verificationStatus,
+      pinMustChange: caregivers.pinMustChange,
+      pinChangedAt: caregivers.pinChangedAt,
     })
     .from(caregivers)
     .where(eq(caregivers.id, Number(session.sub)))
     .limit(1);
 
-  // Suspension revokes refresh tokens (Flow C); it must revoke page access too.
-  if (!caregiver || caregiver.verificationStatus !== "approved") {
-    return toLogin("/caregiver/login", "/caregiver");
+  if (!caregiver || caregiver.verificationStatus !== "approved") return null;
+
+  if (caregiver.pinChangedAt && session.iat !== undefined) {
+    // One second of slack: `iat` is whole seconds, `pin_changed_at` is not, so
+    // the cookie issued by the very action that changed the PIN would otherwise
+    // look stale by a fraction of a second and log her straight back out.
+    const issuedAtMs = session.iat * 1000 + 1000;
+    if (issuedAtMs < caregiver.pinChangedAt.getTime()) return null;
   }
 
-  return { caregiverId: caregiver.id, name: caregiver.name };
+  return {
+    caregiverId: caregiver.id,
+    name: caregiver.name,
+    mustChangePin: caregiver.pinMustChange,
+  };
 });
