@@ -27,6 +27,7 @@ const officeRoutes = [
   "/office/bookings",
   "/office/bookings/new",
   "/office/leads",
+  "/office/caregivers",
   "/office/catalog",
   "/office/alerts",
   "/office/complaints",

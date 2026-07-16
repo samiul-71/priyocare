@@ -1,9 +1,10 @@
 import "server-only";
 
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { getDb, isDbConfigured } from "../db";
 import {
   bookings,
+  caregiverVerificationSteps,
   caregivers,
   opsAlerts,
   patientProfiles,
@@ -14,6 +15,7 @@ import {
   rankEligibleCaregivers,
   type CaregiverForDispatch,
 } from "../../shared/dispatch";
+import { evaluateActivation, requiredStepsFor } from "../../shared/onboarding";
 
 /**
  * Office read models (PRD §5). All reads are no-DB-safe: without a configured
@@ -135,4 +137,134 @@ export async function listEligibleForBooking(bookingId: number) {
     windowStart: 0,
     windowEnd: 0,
   });
+}
+
+/* ------------------------------------------------- caregiver onboarding (§12.2) */
+
+export interface CaregiverRow {
+  id: number;
+  fullName: string;
+  phone: string;
+  skill: string;
+  verificationStatus: string;
+  /** Whether a login PIN has been issued — never the PIN or its hash. */
+  hasPin: boolean;
+  stepsDone: number;
+  stepsRequired: number;
+  canActivate: boolean;
+}
+
+/**
+ * The onboarding board: every caregiver and how far through the checklist they
+ * are. `hasPin` is a boolean derived from `pin_hash IS NOT NULL` — the hash
+ * itself never leaves the database layer, and there is no query anywhere that
+ * selects it into a page.
+ */
+export async function listCaregivers(): Promise<CaregiverRow[]> {
+  if (!isDbConfigured()) return [];
+  const db = getDb();
+
+  const rows = await db
+    .select({
+      id: caregivers.id,
+      fullName: caregivers.fullName,
+      phone: caregivers.phone,
+      skill: caregivers.skill,
+      verificationStatus: caregivers.verificationStatus,
+      hasPin: sql<boolean>`${caregivers.pinHash} is not null`,
+      bnmcRegNo: caregivers.bnmcRegNo,
+      bkashPayoutNumber: caregivers.bkashPayoutNumber,
+    })
+    .from(caregivers)
+    .orderBy(desc(caregivers.createdAt));
+
+  const steps = await db
+    .select({
+      caregiverId: caregiverVerificationSteps.caregiverId,
+      step: caregiverVerificationSteps.step,
+      completedAt: caregiverVerificationSteps.completedAt,
+    })
+    .from(caregiverVerificationSteps);
+
+  return rows.map((cg) => {
+    const done = steps
+      .filter((s) => s.caregiverId === cg.id && s.completedAt !== null)
+      .map((s) => s.step);
+    const activation = evaluateActivation({
+      skill: cg.skill,
+      completedSteps: done,
+      payoutNumber: cg.bkashPayoutNumber ?? null,
+      bnmcRegNo: cg.bnmcRegNo ?? null,
+    });
+    return {
+      id: cg.id,
+      fullName: cg.fullName,
+      phone: cg.phone,
+      skill: cg.skill,
+      verificationStatus: cg.verificationStatus,
+      hasPin: cg.hasPin,
+      stepsDone: done.length,
+      stepsRequired: requiredStepsFor(cg.skill).length,
+      canActivate: activation.canActivate,
+    };
+  });
+}
+
+export interface CaregiverDetail extends CaregiverRow {
+  bnmcRegNo: string | null;
+  bkashPayoutNumber: string | null;
+  completedSteps: string[];
+  requiredSteps: string[];
+  /** Exactly what is still blocking activation — shown to Ops verbatim. */
+  missing: string[];
+}
+
+/** One caregiver's file, with the checklist and precisely what is missing. */
+export async function getCaregiverDetail(caregiverId: number): Promise<CaregiverDetail | null> {
+  if (!isDbConfigured()) return null;
+  const db = getDb();
+
+  const [cg] = await db
+    .select({
+      id: caregivers.id,
+      fullName: caregivers.fullName,
+      phone: caregivers.phone,
+      skill: caregivers.skill,
+      verificationStatus: caregivers.verificationStatus,
+      hasPin: sql<boolean>`${caregivers.pinHash} is not null`,
+      bnmcRegNo: caregivers.bnmcRegNo,
+      bkashPayoutNumber: caregivers.bkashPayoutNumber,
+    })
+    .from(caregivers)
+    .where(eq(caregivers.id, caregiverId))
+    .limit(1);
+
+  if (!cg) return null;
+
+  const stepRows = await db
+    .select({
+      step: caregiverVerificationSteps.step,
+      completedAt: caregiverVerificationSteps.completedAt,
+    })
+    .from(caregiverVerificationSteps)
+    .where(eq(caregiverVerificationSteps.caregiverId, caregiverId));
+
+  const completedSteps = stepRows.filter((s) => s.completedAt !== null).map((s) => s.step);
+  const requiredSteps = requiredStepsFor(cg.skill);
+  const activation = evaluateActivation({
+    skill: cg.skill,
+    completedSteps,
+    payoutNumber: cg.bkashPayoutNumber ?? null,
+    bnmcRegNo: cg.bnmcRegNo ?? null,
+  });
+
+  return {
+    ...cg,
+    completedSteps,
+    requiredSteps,
+    stepsDone: completedSteps.length,
+    stepsRequired: requiredSteps.length,
+    canActivate: activation.canActivate,
+    missing: activation.missing,
+  };
 }

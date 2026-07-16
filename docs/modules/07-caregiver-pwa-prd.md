@@ -170,7 +170,8 @@ Server computes distance, **always returns success**, no outcome signalled. Mism
 
 - [ ] Field-verify iOS/Android PWA scoping on target budget devices (§4.3).
 - [ ] Barcode library choice / camera permissions UX. **As built: manual entry only** — §11 requires the fallback regardless, and shipping it first means every device works today; the camera becomes an accelerator, not a dependency.
-- [ ] **Caregiver onboarding is missing and blocks real use.** No shipped path creates a caregiver row (module 08 scope, unbuilt). Not worked around with a CLI on purpose: minting an approved caregiver with a PIN would bypass the §7.4/§12.2 activation gate.
+- [x] ~~Caregiver onboarding is missing and blocks real use.~~ **Built** — intake → checklist → payout → activate → PIN issuance, gated by `evaluateActivation` re-read from the database. See PROGRESS.md.
+- [ ] **Change PIN on first login.** The initial PIN is admin-issued (the OTP self-set flow needs the SMS provider, §19), so Ops knows it until she changes it — and today she cannot.
 - [ ] **Two-device conflict beyond dedupe (§11).** `event_uuid` makes replay safe, but two devices ticking *different* task sets both "win" in turn — last write to `care_logs` stands. Real conflict resolution needs a rule from Ops (is that even a scenario worth solving?).
 
 ---

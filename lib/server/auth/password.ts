@@ -1,5 +1,6 @@
 import "server-only";
 
+import { randomInt } from "node:crypto";
 import { hash, verify } from "@node-rs/argon2";
 
 /**
@@ -23,3 +24,22 @@ export function verifyPassword(storedHash: string, plaintext: string): Promise<b
 /** Caregiver PIN — same argon2id treatment as passwords. */
 export const hashPin = hashPassword;
 export const verifyPin = verifyPassword;
+
+const PIN_LENGTH = 6;
+
+/**
+ * Mint a caregiver's initial PIN at activation (§12.2).
+ *
+ * `randomInt` (CSPRNG, rejection-sampled) rather than `Math.random()` — this is
+ * a credential, and `Math.random()` is predictable enough that a PIN from it is
+ * decoration. 6 digits is the top of the schema's 4–6 range: the entropy is low
+ * either way, which is exactly why argon2id hashes it and why login is
+ * rate-limited.
+ *
+ * Returned in plaintext ONCE, to be read to the caregiver and never stored.
+ */
+export function generatePin(): string {
+  let pin = "";
+  for (let i = 0; i < PIN_LENGTH; i++) pin += randomInt(0, 10);
+  return pin;
+}

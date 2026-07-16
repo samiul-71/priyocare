@@ -19,6 +19,8 @@ const guarded = [
   { path: "/office/bookings/new", login: "/office/login" },
   { path: "/office/bookings/1/assign", login: "/office/login" },
   { path: "/office/leads", login: "/office/login" },
+  { path: "/office/caregivers", login: "/office/login" },
+  { path: "/office/caregivers/1/verify", login: "/office/login" },
   { path: "/office/catalog", login: "/office/login" },
   { path: "/office/alerts", login: "/office/login" },
   { path: "/office/complaints", login: "/office/login" },

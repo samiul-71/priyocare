@@ -21,6 +21,7 @@ const NAV = [
   { href: "/office/bookings", label: "Bookings" },
   { href: "/office/bookings/new", label: "New (phone)" },
   { href: "/office/leads", label: "Leads" },
+  { href: "/office/caregivers", label: "Caregivers" },
   { href: "/office/complaints", label: "Complaints" },
   { href: "/office/samples", label: "Samples" },
   { href: "/office/catalog", label: "Catalogue" },

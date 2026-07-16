@@ -12,10 +12,15 @@ import {
   users,
 } from "../db/schema";
 import { revokeAllForSubject } from "../auth/sessions";
+import { generatePin, hashPin } from "../auth/password";
 import { formatBookingCode } from "../../shared/booking-code";
 import { ratingTriggersComplaint } from "../../shared/complaints";
 import { evaluateActivation, type ActivationResult } from "../../shared/onboarding";
-import type { PhoneBookingInput } from "../../shared/office-schemas";
+import type {
+  CreateCaregiverInput,
+  PhoneBookingInput,
+  UpdateCaregiverInput,
+} from "../../shared/office-schemas";
 
 /**
  * Manual phone booking (P0, PRD §3.1). Records a booking taken over the hotline
@@ -94,6 +99,150 @@ export async function assignCaregiver(
       updatedAt: new Date(),
     })
     .where(eq(bookings.id, bookingId));
+}
+
+/** A caregiver already exists with this phone number. */
+export class DuplicateCaregiverError extends Error {}
+
+/**
+ * Start a caregiver application (PRD §12.2, module 08 §5 row 5).
+ *
+ * This is intake and ONLY intake. The row lands `pending` with `pin_hash` null,
+ * which is not an oversight — §12.2 says no PIN before the checklist, and the
+ * caregiver login handler already refuses anyone whose `pin_hash` is null or
+ * whose status is not `approved`. So a freshly created caregiver cannot log in,
+ * cannot be dispatched (the eligibility filter requires `approved`), and cannot
+ * be activated until every step, the payout number, and BNMC-for-nurses exist.
+ *
+ * The phone number is the identity: a duplicate is rejected rather than merged,
+ * because two people sharing a number is a real thing here and silently
+ * attaching one person's clearance to another's file is unthinkable.
+ */
+export async function createCaregiverApplication(
+  input: CreateCaregiverInput,
+): Promise<{ id: number; verificationStatus: string }> {
+  const db = getDb();
+
+  const [existing] = await db
+    .select({ id: caregivers.id })
+    .from(caregivers)
+    .where(eq(caregivers.phone, input.phone))
+    .limit(1);
+  if (existing) {
+    throw new DuplicateCaregiverError(`A caregiver already exists for ${input.phone}.`);
+  }
+
+  const [created] = await db
+    .insert(caregivers)
+    .values({
+      fullName: input.fullName,
+      phone: input.phone,
+      skill: input.skill,
+      bnmcRegNo: input.bnmcRegNo,
+      // Columns are named *_url for historical reasons; these are references,
+      // never caller-supplied URLs (see office-schemas.ts).
+      nidFrontUrl: input.nidFrontRef,
+      nidBackUrl: input.nidBackRef,
+      photoUrl: input.photoRef,
+      policeClearanceUrl: input.policeClearanceRef,
+      bkashPayoutNumber: input.bkashPayoutNumber,
+      zones: input.zones,
+      verificationStatus: "pending", // the only status intake may produce
+      // pin_hash deliberately absent — issued at activation, never before.
+    })
+    .returning({ id: caregivers.id, verificationStatus: caregivers.verificationStatus });
+
+  return created;
+}
+
+/** Update a caregiver's file — payout number, BNMC, zones (§12.2). */
+export async function updateCaregiverFile(
+  caregiverId: number,
+  input: UpdateCaregiverInput,
+): Promise<boolean> {
+  const updated = await getDb()
+    .update(caregivers)
+    .set({
+      ...(input.bkashPayoutNumber !== undefined
+        ? { bkashPayoutNumber: input.bkashPayoutNumber }
+        : {}),
+      ...(input.bnmcRegNo !== undefined ? { bnmcRegNo: input.bnmcRegNo } : {}),
+      ...(input.zones !== undefined ? { zones: input.zones } : {}),
+    })
+    .where(eq(caregivers.id, caregiverId))
+    .returning({ id: caregivers.id });
+
+  return updated.length > 0;
+}
+
+export type IssuePinResult =
+  | { ok: true; pin: string }
+  | { ok: false; reason: "not_found" | "not_approved" | "already_issued"; missing?: string[] };
+
+/**
+ * Issue the initial login PIN — the last link in the chain, and the one that
+ * actually lets a caregiver into the app (module 07 was unusable without it).
+ *
+ * THE GATE (§12.2): the activation rules are re-evaluated here from the
+ * database, not trusted from the caller and not inferred from
+ * `verification_status` alone. Status could have been set by an older code
+ * path; the checklist is the truth. No steps, no payout, no BNMC → no PIN, and
+ * therefore no login and no dispatch.
+ *
+ * Refuses to overwrite an existing PIN: re-issuing would silently lock out a
+ * working caregiver mid-shift. A forgotten PIN is a reset (OTP fallback, §10.1)
+ * — a different operation with a different audit story.
+ *
+ * The plaintext PIN is returned ONCE for Ops to hand over and is never stored,
+ * logged, or retrievable. See the trade-off note in the route handler.
+ */
+export async function issueCaregiverPin(caregiverId: number): Promise<IssuePinResult> {
+  const db = getDb();
+
+  const [cg] = await db
+    .select({
+      id: caregivers.id,
+      skill: caregivers.skill,
+      pinHash: caregivers.pinHash,
+      bnmcRegNo: caregivers.bnmcRegNo,
+      bkashPayoutNumber: caregivers.bkashPayoutNumber,
+      verificationStatus: caregivers.verificationStatus,
+    })
+    .from(caregivers)
+    .where(eq(caregivers.id, caregiverId))
+    .limit(1);
+
+  if (!cg) return { ok: false, reason: "not_found" };
+  if (cg.pinHash) return { ok: false, reason: "already_issued" };
+
+  const stepRows = await db
+    .select({ step: caregiverVerificationSteps.step })
+    .from(caregiverVerificationSteps)
+    .where(eq(caregiverVerificationSteps.caregiverId, caregiverId));
+
+  const activation = evaluateActivation({
+    skill: cg.skill,
+    completedSteps: stepRows.map((r) => r.step),
+    payoutNumber: cg.bkashPayoutNumber ?? null,
+    bnmcRegNo: cg.bnmcRegNo ?? null,
+  });
+
+  // Both must hold: the checklist passes AND someone activated them.
+  if (!activation.canActivate || cg.verificationStatus !== "approved") {
+    return {
+      ok: false,
+      reason: "not_approved",
+      missing: activation.canActivate ? ["activation"] : activation.missing,
+    };
+  }
+
+  const pin = generatePin();
+  await db
+    .update(caregivers)
+    .set({ pinHash: await hashPin(pin) })
+    .where(eq(caregivers.id, caregiverId));
+
+  return { ok: true, pin };
 }
 
 /** Mark one verification step complete (PRD §12.2). */

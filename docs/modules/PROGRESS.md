@@ -16,12 +16,22 @@ Legend: ✅ complete · 🚧 in progress · ⬜ not started
 | — | Page auth guards + login pages | ✅ | `79809b7` | `pc_session` cookie, DAL guards on every `/office` + `/caregiver` page, `/office/login` + `/caregiver/login` |
 | 06 | Lead Capture & CRM (lead) | ✅ | `187ef14` | `/enquiry/[service]` + `/office/leads` Kanban, overdue pinning, 30-day dormancy, archetype gate |
 | 07 | Caregiver PWA (offline-first) | ✅ | `5cd3778` | IndexedDB queue, idempotent sync, advisory geofence, service worker; `/caregiver/today` + tasks/scan/care-log |
+| — | Caregiver onboarding (unblocks 07) | ✅ | _pinned below_ | Intake → checklist → payout → activate → **PIN issuance**; `/office/caregivers` + `/[id]/verify` |
 | 09 | API Layer | ⬜ | — | Route handlers consolidated; partly built alongside 03/04/08 |
 
 ## Next up
 
 **Now:** Module 09 — API Layer: fold the route handlers built alongside 03/04/06/07/08 into one consolidated, documented surface, and take the localStorage-Bearer refactor with it (below).
-**Then:** the deferred items below — caregiver onboarding (no way to create a caregiver yet), Redis-backed rate limits + the scheduled jobs, and the storage provider that unblocks report/document upload.
+**Then:** the deferred items below — Redis-backed rate limits + the scheduled jobs, the storage provider that unblocks report/document upload, and the SMS/OTP provider (which also closes the admin-issued-PIN trade-off).
+
+### Caregiver onboarding — what's full vs. deferred
+
+Closes the blocking gap module 07 surfaced: no shipped path created a caregiver, so the field app was unusable by anyone.
+
+- **Full:** the whole chain — `POST /api/v1/office/caregivers` (intake → `pending`, no PIN), `PATCH /office/caregivers/{id}` (bKash payout, BNMC, zones), the existing `/verify` step endpoint, and **`POST /office/caregivers/{id}/pin`** (the missing link: `activateCaregiver` flipped status but never issued a credential, so even an approved caregiver could not log in). Pages: `/office/caregivers` board + `/office/caregivers/[id]/verify`. 15 unit tests.
+- **The gate is the point (§12.2, AC 2.2):** PIN issuance re-evaluates `evaluateActivation` **from the database** — not from the caller, and not from `verification_status` alone, which an older code path could have set. Verified live: empty checklist → 409 listing all six blockers; 5/5 steps but no payout → 409 `["bkash_payout_number"]`; **babysitter with 5/5 + payout → 409 `["references","safeguarding"]`** (the two extra steps are genuinely mandatory, not advisory); complete file → PIN issued → caregiver logs in 200, wrong PIN 401. Re-issuing is refused (409) — overwriting a live PIN would lock out a working caregiver mid-shift; a forgotten PIN is a reset, not a re-issue.
+- **Design notes:** documents take an opaque **reference, never a URL** — a caller-supplied URL for a police clearance would let anyone point the highest-trust record in the system at any address (same rule as lead documents; storage keys once §19 lands). The PIN is generated with `randomInt` (CSPRNG), argon2id-hashed, returned once, never stored/logged/retrievable; `pin_hash` is never selected into a page — asserted against the rendered HTML.
+- **Deferred / trade-off recorded:** the initial PIN is **admin-issued**, so Ops briefly knows it. The better flow — she sets it herself over OTP (§10.1's fallback) — needs the SMS provider (§19). **"Change PIN on first login" is the follow-up that closes this**, tracked below. Also not built: reject-with-reason, PIN reset, and document upload UI (all wait on the same storage/SMS providers).
 
 ### Module 07 — what's full vs. deferred
 
@@ -67,7 +77,9 @@ Closed the gap where `/office/*` and `/caregiver/*` pages were viewable by anyon
 ## Deferred / follow-ups (tracked, not yet built)
 
 - [x] **Page-level auth guards + login pages** — done (see above). Customer `/book/*` stays intentionally public (guest booking, Flow A).
-- [ ] **Caregiver onboarding** (module 08's deferred scope). No caregiver row can be created by any shipped path — not by API, not by CLI. Module 07 is therefore unusable in production until this exists. It must go through the §7.4 verification steps → `activateCaregiver` gate (which *is* built), so the PIN is only ever set on an approved caregiver.
+- [x] **Caregiver onboarding** — done (see above). The PIN is only ever set on a caregiver who passes the full §12.2 gate.
+- [ ] **Change PIN on first login + PIN reset.** The initial PIN is admin-issued, so Ops knows it until she changes it — and today there is no way to change it. Needs the SMS/OTP provider (§10.1 fallback, §19). Until then an Ops user could log in as a caregiver they onboarded, which is exactly the kind of thing the geofence-invisibility and complaint rules assume cannot happen quietly.
+- [ ] **Reject a caregiver with a reason.** `verification_status` has `rejected` and nothing sets it — a failed police check currently has no recorded outcome.
 - [ ] **Get Bearer tokens out of the browser** (module 09). The office forms keep the access + refresh pair in `localStorage` (`lib/shared/client-tokens.ts`) because `/api/v1/office/*` authenticates with Bearer headers. Any XSS on the origin can read them; the page cookie is httpOnly and cannot. The real fix is to make office mutations **Server Actions authorised by the cookie**, leaving Bearer for genuine API clients — a module 09 refactor, since it changes every office handler's entry point.
 - [ ] **A missing `JWT_SECRET` silently signs everyone out.** `verifyPageSession`/`verifyAccessToken` catch *all* errors and return null, including the "JWT_SECRET must be set" throw — so a misconfigured deploy would redirect every user to login rather than failing loudly. Fail fast at boot instead (pre-existing in `tokens.ts`; the page session inherits it).
 
