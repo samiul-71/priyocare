@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
+import { requireStaffPage } from "@/lib/server/auth/dal";
 
 export const metadata: Metadata = { title: "Samples" };
 
 // Sample / report upload (PRD §5). The chain-of-custody model (samples table,
 // statuses) exists in the schema; report upload + lab-rejection + free
 // re-collection are built with the pathology flow (module 04/05).
-export default function SamplesPage() {
+export default async function SamplesPage() {
+  await requireStaffPage();
   return (
     <div>
       <h1 className="font-display text-2xl font-bold text-navy">Samples &amp; reports</h1>

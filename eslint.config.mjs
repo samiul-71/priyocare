@@ -23,6 +23,9 @@ const boundariesConfig = {
       { type: "customer", pattern: ["app/\\(customer\\)/**", "components/customer/**"] },
       { type: "caregiver", pattern: ["app/\\(caregiver\\)/**", "components/caregiver/**"] },
       { type: "office", pattern: ["app/\\(office\\)/**", "components/office/**"] },
+      // Login screens for every actor. Its own group so the pages sit OUTSIDE
+      // the guarded (office)/(caregiver) layouts — see app/(auth)/layout.tsx.
+      { type: "auth", pattern: ["app/\\(auth\\)/**", "components/auth/**"] },
       { type: "api", pattern: ["app/api/**"] },
       { type: "ui", pattern: ["components/ui/**"] },
       { type: "shared", pattern: ["lib/shared/**"] },
@@ -40,6 +43,9 @@ const boundariesConfig = {
           { from: { element: { types: "customer" } }, allow: { to: { element: { types: { anyOf: ["customer", "ui", "shared", "server"] } } } } },
           { from: { element: { types: "caregiver" } }, allow: { to: { element: { types: { anyOf: ["caregiver", "ui", "shared", "server"] } } } } },
           { from: { element: { types: "office" } }, allow: { to: { element: { types: { anyOf: ["office", "ui", "shared", "server"] } } } } },
+          // Login screens stay actor-agnostic: they may not import office or
+          // caregiver code, only the shared schemas and the auth server layer.
+          { from: { element: { types: "auth" } }, allow: { to: { element: { types: { anyOf: ["auth", "ui", "shared", "server"] } } } } },
           { from: { element: { types: "api" } }, allow: { to: { element: { types: { anyOf: ["api", "server", "shared"] } } } } },
           { from: { element: { types: "ui" } }, allow: { to: { element: { types: { anyOf: ["ui", "shared"] } } } } },
           { from: { element: { types: "shared" } }, allow: { to: { element: { types: "shared" } } } },

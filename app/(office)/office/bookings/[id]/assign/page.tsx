@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { listEligibleForBooking } from "@/lib/server/office/queries";
 import { AssignControls } from "@/components/office/AssignControls";
+import { requireStaffPage } from "@/lib/server/auth/dal";
 
 export const metadata: Metadata = { title: "Assign caregiver" };
 
@@ -12,6 +13,7 @@ export default async function AssignPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireStaffPage();
   const bookingId = Number((await params).id);
   const eligible = await listEligibleForBooking(bookingId);
 

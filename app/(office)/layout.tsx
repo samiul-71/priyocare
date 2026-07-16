@@ -1,11 +1,21 @@
 import Link from "next/link";
 import { Logo } from "@/components/ui/Logo";
+import { SignOutButton } from "@/components/office/SignOutButton";
+import { requireStaffPage } from "@/lib/server/auth/dal";
 
 /**
  * Office route-group shell (PRD §4.1, §17.7). Admin panel, desktop-first, no
  * PWA. Feeling: dense, neutral, invisible — navy sidebar, white content.
- * Staff auth guard + role-scoped nav are added in module 03; here the nav is a
- * static placeholder so the surface exists.
+ *
+ * The guard here protects the SHELL (this nav is staff-only chrome and it names
+ * the signed-in user). It is deliberately NOT the only check: Next 16 layouts
+ * do not re-render on client-side navigation, so every page under this group
+ * calls `requireStaffPage` itself. Both calls share one verify + one row read
+ * per render, because the DAL is React-`cache`d.
+ *
+ * /office/login is NOT in this group — it lives in (auth), outside this guard,
+ * or an anonymous visitor would be redirected into a layout that redirects them
+ * again. See app/(auth)/layout.tsx.
  */
 const NAV = [
   { href: "/office/bookings", label: "Bookings" },
@@ -17,18 +27,20 @@ const NAV = [
   { href: "/office/alerts", label: "Alerts" },
 ];
 
-export default function OfficeLayout({
+export default async function OfficeLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const staff = await requireStaffPage();
+
   return (
     <div className="flex min-h-full bg-surface text-sm">
-      <aside className="w-56 shrink-0 bg-navy px-3 py-4 text-white">
+      <aside className="flex w-56 shrink-0 flex-col bg-navy px-3 py-4 text-white">
         <div className="mb-6 px-1">
           <Logo variant="white" />
         </div>
-        <nav>
+        <nav className="flex-1">
           <ul className="flex flex-col gap-1">
             {NAV.map((item) => (
               <li key={item.href}>
@@ -42,6 +54,12 @@ export default function OfficeLayout({
             ))}
           </ul>
         </nav>
+        <div className="mt-4 border-t border-white/15 pt-3">
+          <p className="px-3 pb-1 text-xs text-white/60">
+            {staff.name} · {staff.role}
+          </p>
+          <SignOutButton />
+        </div>
       </aside>
       <main className="flex-1 p-6">{children}</main>
     </div>

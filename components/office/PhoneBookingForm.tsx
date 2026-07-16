@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { phoneBookingSchema } from "@/lib/shared/office-schemas";
 import { SERVICE_SEED, ZONES } from "@/lib/shared/catalogue-seed";
+import { staffAuthHeader } from "@/lib/shared/client-tokens";
 
 /**
  * Manual phone booking form (P0, PRD §3.1). Supports ANY of the services —
@@ -42,14 +43,9 @@ export function PhoneBookingForm() {
     setErrors({});
     setSubmitting(true);
     try {
-      const token =
-        typeof window !== "undefined" ? window.localStorage.getItem("pc_staff_token") : null;
       const res = await fetch("/api/v1/office/bookings", {
         method: "POST",
-        headers: {
-          "content-type": "application/json",
-          ...(token ? { authorization: `Bearer ${token}` } : {}),
-        },
+        headers: { "content-type": "application/json", ...staffAuthHeader() },
         body: JSON.stringify(parsed.data),
       });
       const data = await res.json().catch(() => ({}));

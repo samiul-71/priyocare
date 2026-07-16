@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Logo } from "@/components/ui/Logo";
+import { requireCaregiverPage } from "@/lib/server/auth/dal";
 
 // Caregiver PWA uses its own path-scoped manifest (PRD §4.3, §17.5).
 export const metadata: Metadata = {
@@ -14,12 +15,18 @@ export const metadata: Metadata = {
  * one decision per screen, sunlight-readable. The sync-status indicator lives
  * in the shell chrome so it is always visible; it is wired to the IndexedDB
  * queue in module 07 — here it is a static placeholder.
+ *
+ * Guarded like the office shell, and for the same reason each page under it
+ * guards itself too (layouts do not re-render across navigations). /caregiver/
+ * login sits in the (auth) group, outside this guard.
  */
-export default function CaregiverLayout({
+export default async function CaregiverLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  await requireCaregiverPage();
+
   return (
     <div className="flex min-h-full flex-col bg-surface text-lg">
       <header className="flex items-center justify-between gap-3 bg-teal-800 px-4 py-3 text-white">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { staffAuthHeader } from "@/lib/shared/client-tokens";
 
 /**
  * Dispatch controls (PRD §9, AC 3.1). Ops picks from the ranked eligible list;
@@ -38,14 +39,9 @@ export function AssignControls({
     setSubmitting(true);
     setResult(null);
     try {
-      const token =
-        typeof window !== "undefined" ? window.localStorage.getItem("pc_staff_token") : null;
       const res = await fetch(`/api/v1/office/bookings/${bookingId}/dispatch`, {
         method: "POST",
-        headers: {
-          "content-type": "application/json",
-          ...(token ? { authorization: `Bearer ${token}` } : {}),
-        },
+        headers: { "content-type": "application/json", ...staffAuthHeader() },
         body: JSON.stringify({
           caregiverId: selected,
           ...(isOverride ? { reason } : {}),

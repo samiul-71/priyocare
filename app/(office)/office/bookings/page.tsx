@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { listBookingQueue } from "@/lib/server/office/queries";
+import { requireStaffPage } from "@/lib/server/auth/dal";
 
 export const metadata: Metadata = { title: "Bookings" };
 export const dynamic = "force-dynamic"; // always show live queue data
@@ -8,6 +9,7 @@ export const dynamic = "force-dynamic"; // always show live queue data
 // Booking queue (PRD §5). Web and phone bookings in one place. Empty-safe: with
 // no database configured it renders the empty state instead of crashing.
 export default async function BookingQueuePage() {
+  await requireStaffPage();
   const rows = await listBookingQueue();
 
   return (

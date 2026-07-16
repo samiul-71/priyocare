@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
 import { PhoneBookingForm } from "@/components/office/PhoneBookingForm";
+import { requireStaffPage } from "@/lib/server/auth/dal";
 
 export const metadata: Metadata = { title: "New phone booking" };
 
 // ★ Manual phone booking — P0 (PRD §3.1, §5). The hotline is the primary
 // channel today, so this is built and tested before the customer booking flow.
-export default function NewPhoneBookingPage() {
+export default async function NewPhoneBookingPage() {
+  await requireStaffPage();
+
   return (
     <div>
       <h1 className="font-display text-2xl font-bold text-navy">New phone booking</h1>

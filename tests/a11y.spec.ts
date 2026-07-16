@@ -7,27 +7,30 @@ import AxeBuilder from "@axe-core/playwright";
  * type error. No warnings-only mode.
  *
  * The master PRD lists 8 critical routes; most are built in later modules.
- * This spec covers the routes that exist in module 01 and MUST grow to the
- * full list as each route ships:
+ * This spec covers the routes that exist and MUST grow to the full list as each
+ * route ships:
  *   /  ·  /book/[service]/select  ·  /book/address  ·  /book/slot
  *   /book/checkout  ·  /bookings/[id]/track  ·  /caregiver/today
  *   /caregiver/today/care-log
+ *
+ * COVERAGE NOTE — /office/* and /caregiver/* used to be listed here and are
+ * not any more. They are now behind a page guard whose secure check needs a
+ * real staff/caregiver row, and this environment has no Postgres, so they
+ * redirect to login. Leaving them in the list would NOT have failed: axe would
+ * have followed the redirect and scanned the login page seven times while
+ * reporting the office routes as green. Their a11y pass runs on the VPS, where
+ * a session exists. What is asserted here instead is that they redirect at all
+ * — see auth-guard.spec.ts.
  */
 const routes = [
   "/",
-  "/office",
-  "/office/catalog",
-  "/office/bookings",
-  "/office/bookings/new",
-  "/office/alerts",
-  "/office/complaints",
-  "/office/samples",
+  "/office/login",
+  "/caregiver/login",
   "/book/nursing/select",
   "/book/checkout",
   "/book/confirmation",
   "/bookings/1/track",
   "/bookings/1/status",
-  "/caregiver",
 ];
 
 for (const route of routes) {

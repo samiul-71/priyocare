@@ -4,6 +4,7 @@ import { getDb } from "@/lib/server/db";
 import { caregivers } from "@/lib/server/db/schema";
 import { verifyPin } from "@/lib/server/auth/password";
 import { issueSession } from "@/lib/server/auth/sessions";
+import { setPageSessionCookie } from "@/lib/server/auth/dal";
 import { RATE_LIMITS, rateLimiter } from "@/lib/server/auth/rate-limit";
 import { clientIp, parseBody, tooManyRequests } from "@/lib/server/http";
 
@@ -38,5 +39,8 @@ export async function POST(req: Request) {
   if (!(await verifyPin(caregiver.pinHash, pin))) return invalid;
 
   const session = await issueSession("caregiver", caregiver.id);
+  // 30-day page cookie — long by design, so an expired 15-min access token can
+  // never bounce a caregiver to the login screen mid-shift (§10.1, Flow A).
+  await setPageSessionCookie({ sub: String(caregiver.id), st: "caregiver" });
   return Response.json(session);
 }

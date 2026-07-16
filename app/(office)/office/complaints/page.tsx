@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
+import { requireStaffPage } from "@/lib/server/auth/dal";
 
 export const metadata: Metadata = { title: "Complaints" };
 
 // Complaint inbox (PRD §5). The auto-create rule (1–2★) and serious-tag suspend
 // (with token revocation) are implemented in lib/server/office; this inbox view
 // with SLA timers is fleshed out alongside the customer rating flow (module 05).
-export default function ComplaintsPage() {
+export default async function ComplaintsPage() {
+  await requireStaffPage();
   return (
     <div>
       <h1 className="font-display text-2xl font-bold text-navy">Complaints</h1>

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { listOpsAlerts } from "@/lib/server/office/queries";
+import { requireStaffPage } from "@/lib/server/auth/dal";
 
 export const metadata: Metadata = { title: "Alerts" };
 export const dynamic = "force-dynamic"; // always show live alerts
@@ -8,6 +9,7 @@ export const dynamic = "force-dynamic"; // always show live alerts
 // are visible ONLY here — never to the customer or caregiver (AC 4.2). Framed
 // neutrally, never as an accusation.
 export default async function AlertsPage() {
+  await requireStaffPage();
   const alerts = await listOpsAlerts();
 
   return (

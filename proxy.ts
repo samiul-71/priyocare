@@ -8,17 +8,21 @@ import type { NextRequest } from "next/server";
  *
  * NOTE on responsibility: the master PRD frames per-path token checks as a
  * middleware job, but Next 16's guidance is explicit that Proxy is for
- * OPTIMISTIC checks and headers, not full authorization — and because access
- * tokens are Bearer tokens in the Authorization header (not cookies, §10.2), a
- * page navigation carries no token for the proxy to verify anyway. So real
- * authorization lives in the route handlers (`requireAuth`/`requireStaff`), and
- * this proxy does two things every request needs:
+ * OPTIMISTIC checks and headers, not full authorization. So real authorization
+ * lives next to the data — `requireAuth`/`requireStaff` for API handlers,
+ * `requireStaffPage`/`requireCaregiverPage` (lib/server/auth/dal.ts) for pages.
+ * This proxy deliberately performs NO auth redirect, and does three things
+ * every request needs:
  *   1. attach security headers (HSTS, nosniff, frame-deny, scoped CSP)
- *   2. classify the actor by path prefix, ready for optimistic cookie checks
- *      once a page-session cookie is introduced.
+ *   2. classify the actor by path prefix, for downstream logging
+ *   3. forward the pathname so the page guards can build a `?next=` return link
+ *      (a Server Component cannot otherwise see its own URL)
  *
- * The caregiver rule (§10.1 — never redirect to login on token expiry) holds
- * by construction: the proxy performs no auth redirect.
+ * Why no optimistic redirect here even though a page-session cookie now exists:
+ * the proxy runs on prefetches too, the DAL already blocks unauthenticated
+ * renders, and a redirect in this seam is the classic way to break the
+ * caregiver rule (§10.1 — never bounce to login on token expiry). One guard, in
+ * one place, that reads the right token.
  */
 
 type Actor = "staff" | "caregiver" | "customer";
@@ -53,9 +57,15 @@ const CSP = [
 ].join("; ");
 
 export function proxy(request: NextRequest) {
-  const actor = actorForPath(request.nextUrl.pathname);
+  const { pathname } = request.nextUrl;
+  const actor = actorForPath(pathname);
 
-  const response = NextResponse.next();
+  // `set` (not `append`) overwrites any client-supplied value, so a caller
+  // cannot spoof the pathname the guards read back.
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-pc-pathname", pathname);
+
+  const response = NextResponse.next({ request: { headers: requestHeaders } });
   response.headers.set("Content-Security-Policy", CSP);
   response.headers.set("X-Content-Type-Options", "nosniff");
   response.headers.set("X-Frame-Options", "DENY");

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { requireStaffPage } from "@/lib/server/auth/dal";
 import {
   NURSING_VARIANTS,
   SERVICE_SEED,
@@ -87,7 +88,9 @@ function ServiceRow({ service }: { service: ServiceSeed }) {
   );
 }
 
-export default function CatalogPage() {
+export default async function CatalogPage() {
+  await requireStaffPage();
+
   return (
     <div className="max-w-3xl">
       <h1 className="font-display text-2xl font-bold text-navy">Catalogue</h1>

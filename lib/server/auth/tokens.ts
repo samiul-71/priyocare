@@ -28,7 +28,8 @@ const ISSUER = "priyocare";
 const AUDIENCE = "priyocare";
 const ACCESS_TTL_SECONDS = 15 * 60; // ~15 min (§10.1)
 
-function getSecret(): Uint8Array {
+/** Shared by the access token above and the page-session cookie (page-session.ts). */
+export function getSecret(): Uint8Array {
   const secret = process.env.JWT_SECRET;
   if (!secret || secret.length < 32) {
     throw new Error(
