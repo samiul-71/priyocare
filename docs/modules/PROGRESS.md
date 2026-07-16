@@ -19,7 +19,7 @@ Legend: ✅ complete · 🚧 in progress · ⬜ not started
 | — | Caregiver onboarding (unblocks 07) | ✅ | `a15dc0b` | Intake → checklist → payout → activate → **PIN issuance**; `/office/caregivers` + `/[id]/verify` |
 | 09 | API Layer | ✅ | `e8aeefa` | Booking idempotency, `GET /services`, sample scan, write limits, **office Bearer→cookie**, `docs/api.md` |
 | — | Force PIN change on first login | ✅ | `59e1cee` | Closes the admin-issued-PIN gap; revokes sessions predating the change |
-| — | PIN reset (Ops + self-service OTP) | ✅ | _pinned below_ | `/caregiver/forgot-pin` + Ops reset; degrades honestly with no SMS provider |
+| — | PIN reset (Ops + self-service OTP) | ✅ | `56475f8` | `/caregiver/forgot-pin` + Ops reset; degrades honestly with no SMS provider |
 
 ## Next up
 
