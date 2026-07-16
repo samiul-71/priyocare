@@ -26,9 +26,7 @@ Legend: ✅ complete · 🚧 in progress · ⬜ not started
 
 ## Next up
 
-**All nine modules are built.** What remains is provider-blocked or tracked below: Redis (rate limits across processes + the scheduled jobs), the storage provider (report/document upload), the **SMS adapter** — now the only thing standing between the built self-service PIN reset and it working, since Ops-mediated reset covers the need today — and the payment gateway's webhook shape. Then §10.7's external pentest / OWASP pass.
-
-Every credential in the system now has a forced first change and a reset route. The remaining code items in the TODO are smaller and independent.
+**All nine modules are built**, and every credential in the system now has a forced first change and a working reset route. What remains is in the [TODO](#todo--everything-still-outstanding) — mostly waiting on an external provider (Redis, storage, SMS, email, the payment gateway's webhook shape), plus a handful of small independent code items and §10.7's pentest. Nothing there blocks anything else.
 
 ### Staff passwords — what's full vs. deferred
 
