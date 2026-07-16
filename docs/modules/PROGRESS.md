@@ -17,7 +17,7 @@ Legend: ✅ complete · 🚧 in progress · ⬜ not started
 | 06 | Lead Capture & CRM (lead) | ✅ | `187ef14` | `/enquiry/[service]` + `/office/leads` Kanban, overdue pinning, 30-day dormancy, archetype gate |
 | 07 | Caregiver PWA (offline-first) | ✅ | `5cd3778` | IndexedDB queue, idempotent sync, advisory geofence, service worker; `/caregiver/today` + tasks/scan/care-log |
 | — | Caregiver onboarding (unblocks 07) | ✅ | `a15dc0b` | Intake → checklist → payout → activate → **PIN issuance**; `/office/caregivers` + `/[id]/verify` |
-| 09 | API Layer | ✅ | _pinned below_ | Booking idempotency, `GET /services`, sample scan, write limits, **office Bearer→cookie**, `docs/api.md` |
+| 09 | API Layer | ✅ | `e8aeefa` | Booking idempotency, `GET /services`, sample scan, write limits, **office Bearer→cookie**, `docs/api.md` |
 
 ## Next up
 
