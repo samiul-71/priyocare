@@ -2,6 +2,8 @@
 
 Single source of truth for **what's done and what's next**, in build order. Update this file whenever a module's status changes. Full specs live in each `NN-*-prd.md`; the ordering rationale is in [`README.md`](./README.md).
 
+> **Everything still outstanding is in one list: [TODO](#todo--everything-still-outstanding).** All nine modules are built; nothing there blocks the others.
+
 Legend: ✅ complete · 🚧 in progress · ⬜ not started
 
 | # | Module | Status | Commit | Notes |
@@ -109,16 +111,40 @@ Closed the gap where `/office/*` and `/caregiver/*` pages were viewable by anyon
 - **Full:** pure logic (dispatch ranking, activation gate, booking code, complaint rules) with unit tests; `/api/v1/office/*` handlers (phone booking, dispatch, verify+activate, suspend+revoke); office data-access; pages for queue, **P0 phone booking**, assign/dispatch, alerts.
 - **Scaffolded (empty-safe, built out later):** `/office/complaints` and `/office/samples` inbox views — their server-side rules (auto-create, suspend, chain-of-custody) exist; the rich UIs land with modules 04/05.
 
-## Deferred / follow-ups (tracked, not yet built)
+## TODO — everything still outstanding
 
-- [x] **Page-level auth guards + login pages** — done (see above). Customer `/book/*` stays intentionally public (guest booking, Flow A).
-- [x] **Caregiver onboarding** — done (see above). The PIN is only ever set on a caregiver who passes the full §12.2 gate.
-- [x] **Change PIN on first login** — done (see below). It turned out **not** to need SMS: that is only required for *reset* (forgot PIN), which is still open.
-- [x] **PIN reset (forgot PIN)** — done, both routes (see below). Only the SMS *provider adapter* is still missing; the self-service flow is built and tested behind the `SmsSender` seam and works the moment one is wired.
-- [ ] **Staff password reset / rotation.** Staff passwords are admin-set by `db:create-staff` and never change — no forgot-password, no rotation, no forced change. Caregivers now have both a forced first-login change and two reset routes; the people with the *most* access have neither.
-- [ ] **Reject a caregiver with a reason.** `verification_status` has `rejected` and nothing sets it — a failed police check currently has no recorded outcome.
-- [x] **Get Bearer tokens out of the browser** — done for the office (Server Actions). The caregiver PWA keeps one by necessity; see `lib/shared/client-tokens.ts`. The office forms keep the access + refresh pair in `localStorage` (`lib/shared/client-tokens.ts`) because `/api/v1/office/*` authenticates with Bearer headers. Any XSS on the origin can read them; the page cookie is httpOnly and cannot. The real fix is to make office mutations **Server Actions authorised by the cookie**, leaving Bearer for genuine API clients — a module 09 refactor, since it changes every office handler's entry point.
-- [ ] **A missing `JWT_SECRET` silently signs everyone out.** `verifyPageSession`/`verifyAccessToken` catch *all* errors and return null, including the "JWT_SECRET must be set" throw — so a misconfigured deploy would redirect every user to login rather than failing loudly. Fail fast at boot instead (pre-existing in `tokens.ts`; the page session inherits it).
+The single list of what is left. Each module's own "full vs. deferred" section above has the detail; this is the index, so nothing has to be reconstructed by reading the whole file. **Done items are not listed here** — they live in their module's section with the commit that closed them.
+
+### 1. Needs a decision from you (blocks nobody today, but launch waits on it)
+
+- [ ] **Lead owner assignment rule.** Flow C says a new lead lands "+ owner" but no rule says who — round-robin, by service, by shift? Built as: `owner_id` null, board shows "Unassigned", `next_action_at` +24h so nothing goes silent. Needs an Ops answer. (module 06)
+- [ ] **The `postgres` superuser password is still the default `postgres`** on the local machine. Contained (`pg_hba` allows localhost only, and the app uses its own `priyocare` role) but worth changing.
+- [ ] **Mental-health crisis protocol + note encryption**, before any session goes on-platform (§10.6, Phase 3). Enquiries are captured today; the service stays off-platform. (module 06)
+- [ ] **Document-storage retention** for lead attachments and caregiver files (§14).
+
+### 2. Code gaps — buildable now, nothing blocking
+
+- [ ] **Staff password reset / rotation.** *(biggest one.)* Staff passwords are admin-set by `db:create-staff` and never change — no forgot-password, no rotation, no forced first change. A caregiver now has a forced first-login change **and** two reset routes; the people with the **most** access — every patient address, every caregiver's file — have none of it.
+- [ ] **A missing `JWT_SECRET` silently signs everyone out.** `verifyPageSession`/`verifyAccessToken` catch *all* errors and return null, including the "JWT_SECRET must be set" throw — so a misconfigured deploy redirects every user to login instead of failing loudly. Fail fast at boot. (Same class as the SMS sender, which now throws — this one is still silent.)
+- [ ] **Reject a caregiver with a reason.** `verification_status` has `rejected` and nothing sets it — a failed police check has no recorded outcome today.
+- [ ] **`/caregiver` has no authenticated a11y pass.** The 8 office pages are scanned signed-in; the caregiver PWA is not, because it needs an approved caregiver row. Worth adding now that onboarding exists.
+- [ ] **Two-device conflict beyond dedupe (§11).** `event_uuid` makes replay safe, but two devices ticking *different* task sets both "win" in turn — last write to `care_logs` stands. Needs an Ops rule, or a decision that it is not a real scenario.
+
+### 3. Waiting on an external provider (§19)
+
+- [ ] **SMS adapter** — one `SmsSender` implementation. The self-service PIN reset and customer OTP login are built and tested behind the seam; they work the moment it lands. Ops-mediated reset covers the need until then. Set `SMS_PROVIDER_CONFIGURED=1` when wired.
+- [ ] **Redis** — rate limits currently use the in-memory limiter (correct for one process, wrong for several) and **three scheduled jobs are plain functions nothing calls**: `sweepDormantLeads` (§12.1), `flagMissedCheckIns` (§11), and the report-overdue sweep.
+- [ ] **Private storage** — blocks report upload/streaming (module 05), lead document upload (06), caregiver document scans (onboarding — Ops files a *reference* today), and care-log photos (07).
+- [ ] **Payment gateway spec** — the webhook's HMAC verification is real; the payload field mapping is a guess until the provider's spec exists (module 04).
+- [ ] **Masked calling** — the button on `/bookings/[id]/track` is a placeholder (module 05).
+- [ ] **Camera barcode scanning** — manual entry ships and is the §11-required fallback anyway; the library choice is an open question (§14). (module 07)
+
+### 4. Pre-launch
+
+- [ ] **External pentest / OWASP API Top 10 pass** (§10.7). Closed while building: API2 (office Bearer tokens removed from the browser), API4 (write limits on all 14 write handlers), API6 (booking idempotency). The rest is unreviewed.
+- [ ] **Rate-limit thresholds** are informed guesses — they need real traffic (§14). The login limits were already reworked once after a real failure; see module 09's section.
+- [ ] **Field-verify iOS/Android PWA scoping** on the actual budget devices (§4.3).
+- [ ] **Nonce-plumb the CSP.** `script-src` still carries `'unsafe-inline'` because Next's inline bootstrap is not nonce-wired (§10.7, `proxy.ts`).
 
 ## Environment (updated — local Postgres now exists)
 
