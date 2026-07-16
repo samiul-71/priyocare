@@ -22,6 +22,9 @@ const routes = [
   "/office/alerts",
   "/office/complaints",
   "/office/samples",
+  "/book/nursing/select",
+  "/book/checkout",
+  "/book/confirmation",
   "/caregiver",
 ];
 

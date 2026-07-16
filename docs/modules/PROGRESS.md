@@ -10,17 +10,22 @@ Legend: ✅ complete · 🚧 in progress · ⬜ not started
 | 01 | Design System & Application Foundation | ✅ | `649ef5b` | Tokens, fonts, 3 shells, boundaries + a11y CI gates, landing |
 | 02 | Catalogue & Data Model | ✅ | `7d439a0` | 21-table Drizzle schema + migration, Bangla-Unicode check, seed, `/office/catalog` |
 | 03 | Auth & Security | ✅ | `9c96272` | JWT + rotating refresh, argon2id, rate limits, `/auth/*`, security headers |
-| 08 | Office / Admin Panel (**phone booking P0**) | ✅ | _this commit_ | Phone booking, dispatch, verify/activate, suspend, alerts; queue/assign/alerts pages |
-| 04 | Customer Booking (visit) | ⬜ | — | Depends on 02, 03 — **next** |
-| 05 | Customer Tracking & Reports | ⬜ | — | Depends on 04 |
+| 08 | Office / Admin Panel (**phone booking P0**) | ✅ | `e81287d` | Phone booking, dispatch, verify/activate, suspend, alerts; queue/assign/alerts pages |
+| 04 | Customer Booking (visit) | ✅ | _this commit_ | Price integrity, race-safe slots, refund tiers, webhook HMAC; `/book/*` select→checkout→confirmation |
+| 05 | Customer Tracking & Reports | ⬜ | — | Depends on 04 — **next** |
 | 06 | Lead Capture & CRM (lead) | ⬜ | — | Depends on 02, 03 |
 | 07 | Caregiver PWA (offline-first) | ⬜ | — | Depends on 02, 03 |
-| 09 | API Layer | ⬜ | — | Route handlers consolidated; partly built alongside 03/08 |
+| 09 | API Layer | ⬜ | — | Route handlers consolidated; partly built alongside 03/04/08 |
 
 ## Next up
 
-**Now:** Module 04 — Customer Booking (visit): the `/book/*` flow, slots, price integrity, payments.
-**After 04:** 05 (Tracking) → 06 (Leads) → 07 (Caregiver PWA), folding shared route handlers into 09 as they land.
+**Now:** Module 05 — Customer Tracking & Reports: `/bookings/[id]/track`, `/status`, 15-min signed report links, geofence invisibility.
+**After 05:** 06 (Leads) → 07 (Caregiver PWA), folding shared route handlers into 09 as they land.
+
+### Module 04 — what's full vs. deferred
+
+- **Full:** pricing/refund/slot/webhook logic (unit-tested); `createBooking` (server-side price re-validation + race-safe capacity in one transaction); handlers `GET /slots` (excludes full slots), `POST /bookings` (422 mismatch / 409 slot-full), `POST /payments/webhook/[provider]` (HMAC); `/book/[service]/select` → `/book/checkout` → `/book/confirmation`.
+- **Deferred:** map-pin lat/lng (fixed default for now), separate patient/address/slot/payment sub-routes (consolidated into checkout), real payment-gateway reconciliation (webhook verified; payload mapping needs the provider spec, §19). DB write paths run on the VPS.
 
 ### Module 08 — what's full vs. scaffolded
 
