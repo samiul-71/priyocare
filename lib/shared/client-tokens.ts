@@ -18,6 +18,8 @@
 
 const ACCESS_KEY = "pc_staff_token";
 const REFRESH_KEY = "pc_staff_refresh";
+const CG_ACCESS_KEY = "pc_caregiver_token";
+const CG_REFRESH_KEY = "pc_caregiver_refresh";
 
 export interface StoredTokens {
   accessToken: string;
@@ -50,4 +52,37 @@ export function clearStaffTokens(): void {
 export function staffAuthHeader(): Record<string, string> {
   const token = readStaffAccessToken();
   return token ? { authorization: `Bearer ${token}` } : {};
+}
+
+/* ------------------------------------------------------------- caregiver */
+
+/**
+ * The caregiver PWA's tokens (module 07). Kept apart from the staff keys so a
+ * shared device — an Ops desktop that once logged in as a caregiver for
+ * testing — can never cross the two sessions.
+ *
+ * These are read ONLY at sync time (lib/caregiver/sync.ts), never when queuing
+ * work. That separation is what upholds §10.1 Flow A: a missing or expired
+ * token cannot block a check-in, because the check-in path never reads them.
+ */
+export function readCaregiverAccessToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(CG_ACCESS_KEY);
+}
+
+export function readCaregiverRefreshToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(CG_REFRESH_KEY);
+}
+
+export function storeCaregiverTokens({ accessToken, refreshToken }: StoredTokens): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(CG_ACCESS_KEY, accessToken);
+  window.localStorage.setItem(CG_REFRESH_KEY, refreshToken);
+}
+
+export function clearCaregiverTokens(): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(CG_ACCESS_KEY);
+  window.localStorage.removeItem(CG_REFRESH_KEY);
 }

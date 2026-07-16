@@ -24,6 +24,10 @@ const guarded = [
   { path: "/office/complaints", login: "/office/login" },
   { path: "/office/samples", login: "/office/login" },
   { path: "/caregiver", login: "/caregiver/login" },
+  { path: "/caregiver/today", login: "/caregiver/login" },
+  { path: "/caregiver/today/tasks", login: "/caregiver/login" },
+  { path: "/caregiver/today/scan", login: "/caregiver/login" },
+  { path: "/caregiver/today/care-log", login: "/caregiver/login" },
 ];
 
 for (const { path, login } of guarded) {

@@ -21,7 +21,9 @@ const boundariesConfig = {
     "boundaries/include": ["app/**/*", "components/**/*", "lib/**/*"],
     "boundaries/elements": [
       { type: "customer", pattern: ["app/\\(customer\\)/**", "components/customer/**"] },
-      { type: "caregiver", pattern: ["app/\\(caregiver\\)/**", "components/caregiver/**"] },
+      // lib/caregiver holds the offline queue + sync: not components, but just
+      // as actor-walled — no other group may import the caregiver's queue.
+      { type: "caregiver", pattern: ["app/\\(caregiver\\)/**", "components/caregiver/**", "lib/caregiver/**"] },
       { type: "office", pattern: ["app/\\(office\\)/**", "components/office/**"] },
       // Login screens for every actor. Its own group so the pages sit OUTSIDE
       // the guarded (office)/(caregiver) layouts — see app/(auth)/layout.tsx.

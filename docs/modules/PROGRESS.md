@@ -15,13 +15,22 @@ Legend: ✅ complete · 🚧 in progress · ⬜ not started
 | 05 | Customer Tracking & Reports | ✅ | `eec3cbd` | Status steppers (colour-independent), 15-min signed report links, geofence invisibility; `/bookings/[id]/track` + `/status` |
 | — | Page auth guards + login pages | ✅ | `79809b7` | `pc_session` cookie, DAL guards on every `/office` + `/caregiver` page, `/office/login` + `/caregiver/login` |
 | 06 | Lead Capture & CRM (lead) | ✅ | `187ef14` | `/enquiry/[service]` + `/office/leads` Kanban, overdue pinning, 30-day dormancy, archetype gate |
-| 07 | Caregiver PWA (offline-first) | ⬜ | — | Depends on 02, 03 |
+| 07 | Caregiver PWA (offline-first) | ✅ | _pinned below_ | IndexedDB queue, idempotent sync, advisory geofence, service worker; `/caregiver/today` + tasks/scan/care-log |
 | 09 | API Layer | ⬜ | — | Route handlers consolidated; partly built alongside 03/04/08 |
 
 ## Next up
 
-**Now:** Module 07 — Caregiver PWA (offline-first): `/caregiver/today`, IndexedDB queue, sync, care log. The composition to get right is §10.1 Flow A — writes queue regardless of auth state; the page guard already never reads the access token, so it cannot break the rule.
-**After 07:** 09 (API layer) — fold the route handlers built alongside 03/04/06/08 into one consolidated surface, and take the localStorage-Bearer refactor with it.
+**Now:** Module 09 — API Layer: fold the route handlers built alongside 03/04/06/07/08 into one consolidated, documented surface, and take the localStorage-Bearer refactor with it (below).
+**Then:** the deferred items below — caregiver onboarding (no way to create a caregiver yet), Redis-backed rate limits + the scheduled jobs, and the storage provider that unblocks report/document upload.
+
+### Module 07 — what's full vs. deferred
+
+- **Full:** pure offline logic (`lib/shared/geo.ts` haversine + 500m advisory, `caregiver-events.ts` uuid/dedupe/replay-ordering, `caregiver-schemas.ts`) with 21 unit tests; `lib/caregiver/queue.ts` IndexedDB queue and `sync.ts` (silent-refresh-then-flush); `POST /caregiver/{check-in,check-out,sync}`, `POST /bookings/{id}/care-log`, `PATCH /bookings/{id}/tasks`; service worker at `/caregiver/sw.js` (scope-pinned, network-first pages, **never caches the API**); `/caregiver/today` + tasks/scan/care-log; live sync chrome that owns the flush triggers.
+- **The composition holds (§10.1 Flow A), structurally not carefully:** `enqueue` reads no token and checks no network — `lib/caregiver/sync.ts` is the *only* file that touches either. So an expired access token cannot block a tick (AC-4.1), because the tick never asks. The page guard reads the 30-day cookie, never the 15-minute access token (verified: caregiver cookie `Max-Age` = 30d vs staff 7d).
+- **Geofence is invisible (AC-1), verified live:** a check-in 5,313m away returned `{"ok":true}` — byte-identical in shape to one at the doorstep — while Ops silently got a `geofence_mismatch` alert. `getTodayJob` does not even *select* the booking's lat/lng, so the target cannot be read off the device; asserted against the rendered HTML.
+- **Idempotency (AC-2), verified live:** a whole shift sent **twice** produced 4 `sync_events`, 1 `care_log`, 1 `ops_alert` — zero duplicates (§13 target: 0). A replayed check-in kept its original `occurred_at` of 09:00 rather than the replay's 23:59, and created no second alert. Out-of-order delivery (check-out first) replayed in device order, so the booking still ended `completed` rather than reopening. `care_logs.logged_at`=11:30 (device) vs `synced_at`=20:04 (arrival) — both facts kept.
+- **Deferred:** **camera barcode scanning** — manual entry only, which §11 requires as a fallback anyway and §14 leaves the library an open question; building the fallback first means every device works today. **Background Sync** is deliberately not used (unavailable on iOS, unreliable on cheap Androids): a worker retrying writes would be a second invisible path over the same events. **Photo upload** in the care log waits on the storage provider (§19). The **missed check-in/out sweep** (`flagMissedCheckIns`) is a plain function until Redis/BullMQ.
+- **Blocking gap surfaced:** there is **no way to create a caregiver** — onboarding is module 08's scope and was never built, and no `db:create-caregiver` exists either. Verification used a throwaway fixture. Deliberately not shipped as a CLI: minting an approved caregiver with a PIN bypasses the §7.4/§12.2 activation gate, which is a real safety rule, not paperwork. Onboarding needs building before anyone can actually use this app.
 
 ### Module 06 — what's full vs. deferred
 
@@ -58,6 +67,7 @@ Closed the gap where `/office/*` and `/caregiver/*` pages were viewable by anyon
 ## Deferred / follow-ups (tracked, not yet built)
 
 - [x] **Page-level auth guards + login pages** — done (see above). Customer `/book/*` stays intentionally public (guest booking, Flow A).
+- [ ] **Caregiver onboarding** (module 08's deferred scope). No caregiver row can be created by any shipped path — not by API, not by CLI. Module 07 is therefore unusable in production until this exists. It must go through the §7.4 verification steps → `activateCaregiver` gate (which *is* built), so the PIN is only ever set on an approved caregiver.
 - [ ] **Get Bearer tokens out of the browser** (module 09). The office forms keep the access + refresh pair in `localStorage` (`lib/shared/client-tokens.ts`) because `/api/v1/office/*` authenticates with Bearer headers. Any XSS on the origin can read them; the page cookie is httpOnly and cannot. The real fix is to make office mutations **Server Actions authorised by the cookie**, leaving Bearer for genuine API clients — a module 09 refactor, since it changes every office handler's entry point.
 - [ ] **A missing `JWT_SECRET` silently signs everyone out.** `verifyPageSession`/`verifyAccessToken` catch *all* errors and return null, including the "JWT_SECRET must be set" throw — so a misconfigured deploy would redirect every user to login rather than failing loudly. Fail fast at boot instead (pre-existing in `tokens.ts`; the page session inherits it).
 

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { caregiverLoginSchema } from "@/lib/shared/auth-schemas";
+import { storeCaregiverTokens } from "@/lib/shared/client-tokens";
 import { Button } from "@/components/ui/Button";
 
 /**
@@ -47,9 +48,18 @@ export function CaregiverLoginForm({ returnTo }: { returnTo: string }) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(parsed.data),
       });
-      // The token pair in the body is not read here — module 07's sync layer
-      // owns it. This screen only needs the cookie the response just set.
       if (res.ok) {
+        // The cookie the response just set unlocks the pages; these tokens are
+        // what the offline queue presents at sync time (module 07). They are
+        // read ONLY there — never on the check-in path, so an expired token can
+        // never block field work (§10.1, Flow A).
+        const data = await res.json().catch(() => null);
+        if (data?.accessToken) {
+          storeCaregiverTokens({
+            accessToken: data.accessToken,
+            refreshToken: data.refreshToken,
+          });
+        }
         router.push(returnTo);
         router.refresh();
         return;
