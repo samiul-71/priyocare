@@ -22,7 +22,7 @@ Legend: ✅ complete · 🚧 in progress · ⬜ not started
 | 09 | API Layer | ✅ | `e8aeefa` | Booking idempotency, `GET /services`, sample scan, write limits, **office Bearer→cookie**, `docs/api.md` |
 | — | Force PIN change on first login | ✅ | `59e1cee` | Closes the admin-issued-PIN gap; revokes sessions predating the change |
 | — | PIN reset (Ops + self-service OTP) | ✅ | `56475f8` | `/caregiver/forgot-pin` + Ops reset; degrades honestly with no SMS provider |
-| — | Staff passwords: forced change, change, admin reset | ✅ | _pinned below_ | Closes the same gap for the accounts with the most access; `/office/staff` |
+| — | Staff passwords: forced change, change, admin reset | ✅ | `352a7e9` | Closes the same gap for the accounts with the most access; `/office/staff` |
 
 ## Next up
 
