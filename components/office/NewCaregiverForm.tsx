@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createCaregiverSchema } from "@/lib/shared/office-schemas";
-import { staffAuthHeader } from "@/lib/shared/client-tokens";
+import { createCaregiverAction } from "@/app/(office)/actions";
 import { ZONES } from "@/lib/shared/catalogue-seed";
 
 /**
@@ -56,25 +56,18 @@ export function NewCaregiverForm() {
     setSubmitting(true);
 
     try {
-      const res = await fetch("/api/v1/office/caregivers", {
-        method: "POST",
-        headers: { "content-type": "application/json", ...staffAuthHeader() },
-        body: JSON.stringify(parsed.data),
-      });
-      const data = await res.json().catch(() => ({}));
-
+      const res = await createCaregiverAction(parsed.data);
       if (res.ok) {
         setResult({
           ok: true,
-          message: `Application #${data.id} created — pending verification. No login until the checklist is complete.`,
+          message: `Application #${res.data.id} created — pending verification. No login until the checklist is complete.`,
         });
         form.reset();
         setSkill("");
         router.refresh();
-      } else if (res.status === 401) {
-        setResult({ ok: false, message: "Sign in as staff to create an application." });
       } else {
-        setResult({ ok: false, message: data?.error?.message ?? "Could not create the application." });
+        setResult({ ok: false, message: res.error });
+        if (res.fields) setErrors(res.fields);
       }
     } catch {
       setResult({ ok: false, message: "Network error — please retry." });

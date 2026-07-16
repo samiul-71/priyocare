@@ -13,6 +13,11 @@ import { clientIp, parseBody, tooManyRequests } from "@/lib/server/http";
 // /office/bookings). Price is re-validated server-side in the same transaction
 // as the insert; a mismatch is 422 with no booking and no charge (AC 2.2). A
 // slot that just filled is 409 with no charge attempted (AC 1.2).
+//
+// Send an `Idempotency-Key` header to make a retry safe (S-1): the same key
+// returns the original booking rather than taking a second slot and queueing a
+// second payment. Without one, a retry is a second booking — which is why the
+// checkout form always sends one.
 export async function POST(req: Request) {
   const limit = await rateLimiter.check(
     `booking:ip:${clientIp(req)}`,
@@ -21,7 +26,9 @@ export async function POST(req: Request) {
   );
   if (!limit.allowed) return tooManyRequests(limit.retryAfterMs);
 
-  const parsed = await parseBody(req, createBookingSchema);
+  const parsed = await parseBody(req, createBookingSchema, {
+    idempotencyKey: req.headers.get("idempotency-key")?.trim() || undefined,
+  });
   if (!parsed.ok) return parsed.response;
 
   const claims = await authenticate(req);

@@ -17,12 +17,23 @@ Legend: ✅ complete · 🚧 in progress · ⬜ not started
 | 06 | Lead Capture & CRM (lead) | ✅ | `187ef14` | `/enquiry/[service]` + `/office/leads` Kanban, overdue pinning, 30-day dormancy, archetype gate |
 | 07 | Caregiver PWA (offline-first) | ✅ | `5cd3778` | IndexedDB queue, idempotent sync, advisory geofence, service worker; `/caregiver/today` + tasks/scan/care-log |
 | — | Caregiver onboarding (unblocks 07) | ✅ | `a15dc0b` | Intake → checklist → payout → activate → **PIN issuance**; `/office/caregivers` + `/[id]/verify` |
-| 09 | API Layer | ⬜ | — | Route handlers consolidated; partly built alongside 03/04/08 |
+| 09 | API Layer | ✅ | _pinned below_ | Booking idempotency, `GET /services`, sample scan, write limits, **office Bearer→cookie**, `docs/api.md` |
 
 ## Next up
 
-**Now:** Module 09 — API Layer: fold the route handlers built alongside 03/04/06/07/08 into one consolidated, documented surface, and take the localStorage-Bearer refactor with it (below).
-**Then:** the deferred items below — Redis-backed rate limits + the scheduled jobs, the storage provider that unblocks report/document upload, and the SMS/OTP provider (which also closes the admin-issued-PIN trade-off).
+**All nine modules are built.** What remains is provider-blocked or tracked below: Redis (rate limits + the scheduled jobs), the storage provider (report/document upload), the SMS/OTP provider (which also closes the admin-issued-PIN trade-off), and the payment gateway's webhook shape. Then §10.7's external pentest / OWASP pass.
+
+### Module 09 — what's full vs. deferred
+
+Most of §8 was already built alongside its owning modules. This closed the four real gaps and consolidated the surface.
+
+- **`POST /bookings` was not idempotent (S-1)** — the worst thing in the system to double-execute. A retry took a second slot from a real patient and queued a second payment. Now an `Idempotency-Key` header returns the original booking. Two layers, because a read alone is not enough: the `SELECT` catches an ordinary retry, the **UNIQUE constraint** catches the true race where both requests read nothing and both insert. Verified live: the same key sent three times → one booking, one payment, one item, one slot claimed; a different key → a new booking; no key → still allowed (Ops phone bookings carry none).
+- **`GET /services` did not exist**, so the phone-booking form guessed ids from the seed's sort order — right only on a freshly seeded database, and silently the wrong service anywhere else. Now real ids, server-loaded.
+- **`POST /samples/{barcode}/scan` did not exist.** Built on module 07's existing idempotent `applySampleScan`. Narrower than §8 on purpose: caregiver-only, because no lab actor exists and inventing one is worse than being narrow.
+- **Authenticated writes had no rate limit** — the `writePerAccount` policy existed and nothing used it. Now on all 14 write handlers, keyed by the verified subject rather than the IP.
+- **`localStorage` Bearer tokens are gone** (the tracked security item): office pages mutate through cookie-authorised **Server Actions**, so the browser holds no API credential at all — the class of bug is removed, not mitigated. Next invokes actions POST-only and checks `Origin` against `Host`, so CSRF does not return. `/api/v1/office/*` keeps its Bearer gate for real API clients. Verified in a browser: sign-in works through the form, and `localStorage` holds no token while the cookie stays invisible to JS. The caregiver PWA still holds one, deliberately — its sync flush runs outside a rendered page (documented in `client-tokens.ts`).
+- **A real flaw the tests surfaced:** the office a11y suite started failing because eleven sign-ins from one address tripped the **10-per-5-minute per-IP login cap**. That is not a test artifact — an Ops floor shares one office IP, so the limiter would have locked out the staff on a Monday morning while barely inconveniencing an attacker, who has the whole internet's IPs. Fixed properly: the tight limit is now **per identity** (5/15min), per-IP is a loose spray backstop (50/5min), and **only failures count** — a success clears the identity's history, because brute force is repeated *failure* and charging a correct password punishes the legitimate user for the attacker's behaviour. 10 unit tests lock the behaviour in.
+- **Deferred:** rate-limit thresholds are informed guesses until real traffic (§14); the webhook's payload mapping needs the provider spec (§19) — the HMAC verification is real, the field mapping is not.
 
 ### Caregiver onboarding — what's full vs. deferred
 
@@ -80,7 +91,7 @@ Closed the gap where `/office/*` and `/caregiver/*` pages were viewable by anyon
 - [x] **Caregiver onboarding** — done (see above). The PIN is only ever set on a caregiver who passes the full §12.2 gate.
 - [ ] **Change PIN on first login + PIN reset.** The initial PIN is admin-issued, so Ops knows it until she changes it — and today there is no way to change it. Needs the SMS/OTP provider (§10.1 fallback, §19). Until then an Ops user could log in as a caregiver they onboarded, which is exactly the kind of thing the geofence-invisibility and complaint rules assume cannot happen quietly.
 - [ ] **Reject a caregiver with a reason.** `verification_status` has `rejected` and nothing sets it — a failed police check currently has no recorded outcome.
-- [ ] **Get Bearer tokens out of the browser** (module 09). The office forms keep the access + refresh pair in `localStorage` (`lib/shared/client-tokens.ts`) because `/api/v1/office/*` authenticates with Bearer headers. Any XSS on the origin can read them; the page cookie is httpOnly and cannot. The real fix is to make office mutations **Server Actions authorised by the cookie**, leaving Bearer for genuine API clients — a module 09 refactor, since it changes every office handler's entry point.
+- [x] **Get Bearer tokens out of the browser** — done for the office (Server Actions). The caregiver PWA keeps one by necessity; see `lib/shared/client-tokens.ts`. The office forms keep the access + refresh pair in `localStorage` (`lib/shared/client-tokens.ts`) because `/api/v1/office/*` authenticates with Bearer headers. Any XSS on the origin can read them; the page cookie is httpOnly and cannot. The real fix is to make office mutations **Server Actions authorised by the cookie**, leaving Bearer for genuine API clients — a module 09 refactor, since it changes every office handler's entry point.
 - [ ] **A missing `JWT_SECRET` silently signs everyone out.** `verifyPageSession`/`verifyAccessToken` catch *all* errors and return null, including the "JWT_SECRET must be set" throw — so a misconfigured deploy would redirect every user to login rather than failing loudly. Fail fast at boot instead (pre-existing in `tokens.ts`; the page session inherits it).
 
 ## Environment (updated — local Postgres now exists)

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { createBookingSchema } from "@/lib/shared/booking-schemas";
 import { computeBookingTotal } from "@/lib/shared/pricing";
@@ -51,6 +51,7 @@ export function CheckoutForm() {
   const [errors, setErrors] = useState<Record<string, string[]>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const idempotencyKey = useRef<string | null>(null);
 
   // Load open slots whenever zone/service changes (full slots never returned).
   useEffect(() => {
@@ -75,10 +76,20 @@ export function CheckoutForm() {
 
   const total = computeBookingTotal(cart.items);
 
+  /**
+   * One idempotency key per checkout ATTEMPT (module 09, S-1).
+   *
+   * Minted on first submit and kept across retries, so a lost response cannot
+   * become two bookings — the retry returns the original. Cleared on success,
+   * so the next booking this session is genuinely a new one rather than an echo
+   * of the last. A 409/422 leaves it in place: nothing was created, so the key
+   * is still unused and the corrected resubmit may reuse it.
+   */
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!cart) return;
     setSubmitError(null);
+    idempotencyKey.current ??= crypto.randomUUID();
     const fd = new FormData(e.currentTarget);
     const payload = {
       serviceId: cart.serviceId,
@@ -110,11 +121,15 @@ export function CheckoutForm() {
     try {
       const res = await fetch("/api/v1/bookings", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          "idempotency-key": idempotencyKey.current,
+        },
         body: JSON.stringify(parsed.data),
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
+        idempotencyKey.current = null; // this attempt is done; don't echo it
         window.sessionStorage.removeItem("pc_cart");
         router.push(`/book/confirmation?code=${encodeURIComponent(data.bookingCode)}`);
       } else if (res.status === 409) {

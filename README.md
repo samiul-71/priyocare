@@ -20,6 +20,8 @@ Trusted home healthcare in Dhaka — **one Next.js application, one repository, 
 
 - **Caregiver onboarding** ✅ (unblocks 07) intake → 5-step checklist (7 for a babysitter) → bKash payout → activate → **PIN issuance**, the link that was missing: `activateCaregiver` flipped status but never issued a credential, so no caregiver could ever log in. PIN issuance re-evaluates the whole gate **from the database**, never from `verification_status` alone. `/office/caregivers` + `/[id]/verify`. *(15 unit tests. Verified live: empty checklist → 409 listing all blockers; 5/5 steps without a payout number → 409; babysitter with 5/5 + payout → 409 on `references`/`safeguarding`; complete file → PIN → caregiver logs in. Re-issue refused; no hash reaches the page. Initial PIN is admin-issued — "change PIN on first login" needs the SMS provider and is tracked.)*
 
+- **Module 09 — API Layer** ✅ closed the four real gaps in the §8 surface: **`POST /bookings` idempotency** (`Idempotency-Key` → a retry returns the original instead of taking a second slot and a second payment), **`GET /services`** (real ids — the phone form used to guess them from seed order), **`POST /samples/{barcode}/scan`**, and per-account **write rate limits** on all 14 write handlers. Also **removed Bearer tokens from the office browser** — pages mutate through cookie-authorised Server Actions, so there is no API credential in the page to steal. Full surface documented in [`docs/api.md`](docs/api.md). *(Verified live: the same idempotency key three times → one booking/payment/item; browser sign-in through the action stores no token; login throttling reworked — see below.)*
+
 See [`docs/modules/PROGRESS.md`](docs/modules/PROGRESS.md) for the ordered status of every module. Everything else is specced in `docs/modules/` and built on top of these.
 
 ### Auth architecture (module 03)
@@ -32,6 +34,10 @@ See [`docs/modules/PROGRESS.md`](docs/modules/PROGRESS.md) for the ordered statu
 | Pages (`/office/*`, `/caregiver/*`) | `pc_session` httpOnly cookie | `requireStaffPage` / `requireCaregiverPage` from the DAL |
 
 A page navigation carries no `Authorization` header, so pages need a cookie; APIs keep Bearer. The two tokens share a signing secret but use **different JWT audiences**, so a stolen cookie can't be replayed as an API token and vice versa — asserted in both directions in `tests/page-session.test.ts`.
+
+Since module 09 the **office browser holds no Bearer token at all**: its mutations go through cookie-authorised Server Actions (`app/(office)/actions.ts`), which Next invokes POST-only with an `Origin`/`Host` check. `/api/v1/office/*` keeps its Bearer gate for real API clients. The caregiver PWA still stores a token, deliberately — its sync flush runs outside a rendered page (see `lib/shared/client-tokens.ts`).
+
+**Login throttling** is tight **per identity** (5/15min) and loose per IP (50/5min), and **only failed attempts count** — a success clears the identity's history. The tight limit cannot be the IP one: an Ops floor shares a single office IP, so that would lock out the staff while barely inconveniencing an attacker.
 
 The cookie authorises **reads only** — every mutation still goes through a Bearer-gated handler, so classic CSRF stays out of scope even though a cookie now exists (`sameSite=lax` besides). Session lifetime follows the *refresh* token (staff 7d, caregiver 30d), never the 15-minute access token: that's what upholds the caregiver rule (§10.1) that an expired access token must **never** produce a login screen.
 
@@ -75,6 +81,7 @@ Without `DATABASE_URL` the app does **not** fall back to anything: reads return 
 
 ## Documentation
 
+- `docs/api.md` — the `/api/v1` surface: every endpoint, its auth, and its critical rule
 - `docs/modules/README.md` — module index and dependency-driven build order
 - `docs/modules/design.md` — the design system (colour, type, a11y) derived from the logo
 - `docs/modules/0X-*-prd.md` — one PRD per module

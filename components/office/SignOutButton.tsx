@@ -2,16 +2,13 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { clearStaffTokens, readStaffRefreshToken } from "@/lib/shared/client-tokens";
+import { signOutStaffAction } from "@/app/(office)/actions";
 
 /**
- * Sign out — tears down BOTH halves of the hybrid session (§10.2):
- * the httpOnly page cookie (dropped by the handler, since JS cannot touch it)
- * and the Bearer pair in localStorage (dropped here).
- *
- * The local half is cleared even if the request fails. A sign-out that leaves
- * credentials in the browser because the network blipped is the wrong failure
- * mode — on a shared Ops desk that is the whole point of the button.
+ * Sign out. Since module 09 there is only one thing to tear down — the httpOnly
+ * cookie — because the browser no longer holds any API credential. That is the
+ * whole point of the Server Action refactor: nothing left in the page to leak,
+ * and nothing left here to forget to clear.
  */
 export function SignOutButton() {
   const router = useRouter();
@@ -19,18 +16,11 @@ export function SignOutButton() {
 
   async function signOut() {
     setBusy(true);
-    const refreshToken = readStaffRefreshToken();
     try {
-      await fetch("/api/v1/auth/logout", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        // Revokes the refresh token server-side; the handler needs no Bearer.
-        body: JSON.stringify(refreshToken ? { refreshToken } : {}),
-      });
-    } catch {
-      // Ignore — clearing local state below matters more than the round trip.
+      await signOutStaffAction();
     } finally {
-      clearStaffTokens();
+      // Navigate regardless: a sign-out that leaves someone signed in because
+      // the network blipped is the wrong failure mode on a shared Ops desk.
       router.push("/office/login");
       router.refresh();
     }

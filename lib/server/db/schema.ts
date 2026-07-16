@@ -358,6 +358,13 @@ export const bookings = pgTable(
     ),
     // Reason stored when Ops dispatches a non-top-ranked caregiver (AC 3.1).
     dispatchOverrideReason: text("dispatch_override_reason"),
+    /**
+     * Client-supplied retry key (module 09 §3, S-1). UNIQUE: a retried
+     * POST /bookings returns the original booking instead of taking a second
+     * slot and a second payment. Nullable — Ops' phone bookings do not carry
+     * one, and a booking without a key is still a valid booking.
+     */
+    idempotencyKey: varchar("idempotency_key", { length: 64 }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -365,6 +372,9 @@ export const bookings = pgTable(
     index("idx_bookings_status").on(t.status),
     index("idx_bookings_caregiver").on(t.caregiverId),
     index("idx_bookings_slot").on(t.slotId),
+    // The constraint is the race protection, not the SELECT in createBooking:
+    // two simultaneous retries both miss the read, and exactly one insert wins.
+    uniqueIndex("uq_bookings_idempotency_key").on(t.idempotencyKey),
   ],
 );
 

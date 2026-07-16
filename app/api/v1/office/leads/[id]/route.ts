@@ -4,7 +4,7 @@ import {
   LeadNotFoundError,
   updateLead,
 } from "@/lib/server/leads/mutations";
-import { requireStaff } from "@/lib/server/auth/require-auth";
+import { requireStaff, limitWrites } from "@/lib/server/auth/require-auth";
 import { parseBody } from "@/lib/server/http";
 
 // PATCH /api/v1/office/leads/{id} — Ops advances a lead (§8). A stage change
@@ -13,6 +13,10 @@ import { parseBody } from "@/lib/server/http";
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const auth = await requireStaff(req);
   if (auth instanceof Response) return auth;
+
+  // Runaway-loop guard, per authenticated account (§10.3).
+  const limited = await limitWrites(auth);
+  if (limited) return limited;
 
   const leadId = Number((await ctx.params).id);
   if (!Number.isInteger(leadId) || leadId <= 0) {

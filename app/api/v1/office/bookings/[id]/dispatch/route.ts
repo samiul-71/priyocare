@@ -1,5 +1,5 @@
 import { dispatchSchema } from "@/lib/shared/office-schemas";
-import { requireStaff, jsonError } from "@/lib/server/auth/require-auth";
+import { requireStaff, jsonError, limitWrites } from "@/lib/server/auth/require-auth";
 import { listEligibleForBooking } from "@/lib/server/office/queries";
 import { assignCaregiver } from "@/lib/server/office/mutations";
 import { parseBody } from "@/lib/server/http";
@@ -13,6 +13,10 @@ export async function POST(
 ) {
   const auth = await requireStaff(req);
   if (auth instanceof Response) return auth;
+
+  // Runaway-loop guard, per authenticated account (§10.3).
+  const limited = await limitWrites(auth);
+  if (limited) return limited;
 
   const parsed = await parseBody(req, dispatchSchema);
   if (!parsed.ok) return parsed.response;

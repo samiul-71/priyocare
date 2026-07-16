@@ -1,6 +1,6 @@
 import { updateCaregiverSchema } from "@/lib/shared/office-schemas";
 import { updateCaregiverFile } from "@/lib/server/office/mutations";
-import { requireStaff } from "@/lib/server/auth/require-auth";
+import { requireStaff, limitWrites } from "@/lib/server/auth/require-auth";
 import { parseBody } from "@/lib/server/http";
 
 // PATCH /api/v1/office/caregivers/{id} — update the file: bKash payout number,
@@ -12,6 +12,10 @@ import { parseBody } from "@/lib/server/http";
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const auth = await requireStaff(req);
   if (auth instanceof Response) return auth;
+
+  // Runaway-loop guard, per authenticated account (§10.3).
+  const limited = await limitWrites(auth);
+  if (limited) return limited;
 
   const caregiverId = Number((await ctx.params).id);
   if (!Number.isInteger(caregiverId) || caregiverId <= 0) {

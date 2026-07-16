@@ -156,8 +156,14 @@ Booking is created/confirmed from the gateway callback, independent of what the 
 ## 14. Open questions
 
 - [ ] Payment/SMS/masked-calling provider specifics (webhook shapes).
-- [ ] Rate-limit thresholds per endpoint.
-- [ ] OWASP API Top 10 self-review (§10.7).
+- [ ] Rate-limit thresholds per endpoint. **Partly settled by a real failure:** the office a11y suite tripped the old 10-per-5-min *per-IP* login cap, which an Ops floor behind one NAT address would hit on a Monday morning. The tight limit is now **per identity** (5/15min); per-IP is a loose spray backstop (50/5min); **only failures count**. Remaining thresholds still need real traffic.
+- [ ] OWASP API Top 10 self-review (§10.7). Closed since drafting: **API2 (broken auth)** — office Bearer tokens removed from the browser entirely; **API4 (unrestricted resource consumption)** — write limits on all 14 write handlers; **API6 (business flow abuse)** — booking idempotency. Still open: a full pass, plus the external pentest.
+
+### Settled while building
+
+- **Idempotency (S-1)** is a client-supplied `Idempotency-Key` header + a UNIQUE column, not a table: the key describes a request, and the constraint is what makes two simultaneous retries safe. Replays answer **200/201, never 409** — telling a retrying client "conflict" only makes it retry harder.
+- **`/samples/{barcode}/scan` is caregiver-only**, though §8 says "caregiver/lab". No lab portal, no lab credential — being narrower than the spec beats inventing an actor.
+- **The office browser no longer uses this API.** Its pages mutate through cookie-authorised Server Actions; `/api/v1/office/*` remains for real API clients. §3's "same-origin → no CORS" holds either way.
 
 ---
 

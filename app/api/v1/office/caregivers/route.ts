@@ -3,7 +3,7 @@ import {
   createCaregiverApplication,
   DuplicateCaregiverError,
 } from "@/lib/server/office/mutations";
-import { requireStaff } from "@/lib/server/auth/require-auth";
+import { requireStaff, limitWrites } from "@/lib/server/auth/require-auth";
 import { parseBody } from "@/lib/server/http";
 
 // POST /api/v1/office/caregivers — start a caregiver application (§12.2).
@@ -16,6 +16,10 @@ import { parseBody } from "@/lib/server/http";
 export async function POST(req: Request) {
   const auth = await requireStaff(req);
   if (auth instanceof Response) return auth;
+
+  // Runaway-loop guard, per authenticated account (§10.3).
+  const limited = await limitWrites(auth);
+  if (limited) return limited;
 
   const parsed = await parseBody(req, createCaregiverSchema);
   if (!parsed.ok) return parsed.response;

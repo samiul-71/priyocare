@@ -35,5 +35,15 @@ export const createBookingSchema = z.object({
   priceBdt: z.coerce.number().positive().max(10_000_000),
   paymentMethod: bookingPaymentMethodSchema,
   prescriptionUrl: z.string().url().optional(),
+  /**
+   * Retry key (module 09 §3, S-1). Supplied by the client via the
+   * `Idempotency-Key` header, not the body — it describes the REQUEST, not the
+   * booking, and putting it in the header keeps it out of forms that might
+   * reuse a stale one. The handler merges it in before validation.
+   *
+   * Optional: Ops' phone bookings do not carry one, and a booking without a key
+   * is still a valid booking — just not retry-safe.
+   */
+  idempotencyKey: z.string().trim().min(8).max(64).optional(),
 });
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;

@@ -30,16 +30,67 @@ export interface BookingActor {
   subjectId: number;
 }
 
+/** Postgres unique-violation. Raised when two retries race the same key. */
+function isUniqueViolation(err: unknown): boolean {
+  return typeof err === "object" && err !== null && (err as { code?: string }).code === "23505";
+}
+
+const bookingResponseColumns = {
+  id: bookings.id,
+  bookingCode: bookings.bookingCode,
+  status: bookings.status,
+  priceBdt: bookings.priceBdt,
+};
+
 /**
- * Create a booking (PRD §9). In one transaction:
+ * Create a booking (PRD §9, module 09 S-1). In one transaction:
+ *  0. short-circuit on a replayed idempotency key;
  *  1. recompute the total from the catalogue and block on any mismatch;
  *  2. race-safely claim slot capacity (UPDATE … WHERE booked_count < capacity);
  *  3. insert the booking, item snapshots, and the payment row.
  * The price check and the insert share the transaction — never a post-hoc
  * reconciliation. On mismatch nothing is written and no charge is attempted.
+ *
+ * IDEMPOTENCY: a booking submit is the worst thing to double-execute — a flaky
+ * connection retrying would take a second slot from a real patient and queue a
+ * second payment. `idempotencyKey` makes the retry return the original booking.
+ * Two layers, because the read alone is not enough:
+ *   - the SELECT below catches an ordinary retry (seconds later);
+ *   - the UNIQUE constraint catches the true race, where both requests read
+ *     nothing and both try to insert. One wins; the loser's violation is
+ *     translated back into the winner's booking, so the caller cannot tell
+ *     which of its retries won — nor should it care.
  */
 export async function createBooking(input: CreateBookingInput, actor?: BookingActor) {
+  try {
+    return await createBookingOnce(input, actor);
+  } catch (err) {
+    // Lost the insert race on the key: the winner's booking IS our result.
+    if (input.idempotencyKey && isUniqueViolation(err)) {
+      const [existing] = await getDb()
+        .select(bookingResponseColumns)
+        .from(bookings)
+        .where(eq(bookings.idempotencyKey, input.idempotencyKey))
+        .limit(1);
+      if (existing) return existing;
+    }
+    throw err;
+  }
+}
+
+async function createBookingOnce(input: CreateBookingInput, actor?: BookingActor) {
   return getDb().transaction(async (tx) => {
+    // 0. Already did this exact submit? Return it — no second slot, no second
+    //    payment, and deliberately before any capacity claim.
+    if (input.idempotencyKey) {
+      const [existing] = await tx
+        .select(bookingResponseColumns)
+        .from(bookings)
+        .where(eq(bookings.idempotencyKey, input.idempotencyKey))
+        .limit(1);
+      if (existing) return existing;
+    }
+
     // 1. Recompute price from the live catalogue.
     const variantIds = input.items.map((i) => i.variantId);
     const variants = await tx
@@ -122,8 +173,9 @@ export async function createBooking(input: CreateBookingInput, actor?: BookingAc
         priceBdt: serverTotal.toFixed(2),
         status: "confirmed",
         source: "web",
+        idempotencyKey: input.idempotencyKey,
       })
-      .returning();
+      .returning(bookingResponseColumns);
 
     // 3d. Item snapshots — never joined to the live catalogue for history.
     await tx.insert(bookingItems).values(

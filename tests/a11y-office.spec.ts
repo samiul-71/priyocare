@@ -52,6 +52,52 @@ test.describe("office panel (signed in)", () => {
     ).toBe(200);
   });
 
+  /**
+   * The Server Action sign-in path end to end (module 09): type credentials,
+   * submit, land in the office. This is the flow that replaced localStorage
+   * Bearer tokens — if the action seam breaks, no one can sign in at all, and
+   * the API-level tests would not notice because they authenticate directly.
+   */
+  test("staff sign-in works through the form, and stores no token in the browser", async ({
+    page,
+    context,
+  }) => {
+    await context.clearCookies();
+    await page.goto("/office/login");
+    await page.getByLabel("Email").fill(EMAIL!);
+    await page.getByLabel("Password").fill(PASSWORD!);
+    await page.getByRole("button", { name: "Sign in" }).click();
+
+    await expect(page).toHaveURL(/\/office$/);
+    await expect(page.getByRole("heading", { name: "Office Panel" })).toBeVisible();
+
+    // The point of the refactor: no API credential reaches the page.
+    const stored = await page.evaluate(() => JSON.stringify(window.localStorage));
+    expect(stored).not.toContain("pc_staff_token");
+    expect(stored).not.toContain("pc_staff_refresh");
+
+    // And the session cookie it does set is unreadable from JS.
+    const cookieVisibleToJs = await page.evaluate(() => document.cookie);
+    expect(cookieVisibleToJs).not.toContain("pc_session");
+  });
+
+  test("a wrong password is refused without revealing whether the email exists", async ({
+    page,
+    context,
+  }) => {
+    await context.clearCookies();
+    await page.goto("/office/login");
+    await page.getByLabel("Email").fill(EMAIL!);
+    await page.getByLabel("Password").fill("definitely-not-the-password");
+    await page.getByRole("button", { name: "Sign in" }).click();
+
+    // Scoped to the form: Next's route announcer is also role="alert".
+    await expect(page.locator("form").getByRole("alert")).toContainText(
+      "Wrong email or password",
+    );
+    await expect(page).toHaveURL(/\/office\/login/);
+  });
+
   for (const route of officeRoutes) {
     test(`a11y: ${route} has no serious/critical violations`, async ({ page }) => {
       const response = await page.goto(route);

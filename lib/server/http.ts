@@ -11,14 +11,29 @@ export function clientIp(req: Request): string {
 
 type ParseResult<T> = { ok: true; data: T } | { ok: false; response: Response };
 
-/** Validate a JSON body against a shared Zod schema, or return a 400/422. */
+/**
+ * Validate a JSON body against a shared Zod schema, or return a 400/422.
+ *
+ * `extra` is merged over the body before validation, for fields that belong to
+ * the REQUEST rather than the payload — an `Idempotency-Key` header, a path id.
+ * Merging them in here means one schema still validates the whole shape, so a
+ * header cannot slip in unchecked. It overrides the body deliberately: a client
+ * must not be able to contradict its own header by also sending the field.
+ */
 export async function parseBody<T>(
   req: Request,
   schema: ZodType<T>,
+  extra?: Record<string, unknown>,
 ): Promise<ParseResult<T>> {
   let json: unknown;
   try {
     json = await req.json();
+    if (extra) {
+      const defined = Object.fromEntries(
+        Object.entries(extra).filter(([, v]) => v !== undefined),
+      );
+      json = { ...(json as object), ...defined };
+    }
   } catch {
     return {
       ok: false,

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { updateCaregiverSchema } from "@/lib/shared/office-schemas";
-import { staffAuthHeader } from "@/lib/shared/client-tokens";
+import { updateCaregiverAction } from "@/app/(office)/actions";
 
 /**
  * Set the bKash payout number — an activation requirement, not admin trivia
@@ -35,17 +35,13 @@ export function PayoutNumberForm({
 
     setBusy(true);
     try {
-      const res = await fetch(`/api/v1/office/caregivers/${caregiverId}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json", ...staffAuthHeader() },
-        body: JSON.stringify(parsed.data),
-      });
+      const res = await updateCaregiverAction(caregiverId, parsed.data);
       if (res.ok) {
         setMessage("Saved.");
         router.refresh(); // activation may have just become possible
         return;
       }
-      setMessage(res.status === 401 ? "Session expired — sign in again." : "Could not save.");
+      setMessage(res.error);
     } catch {
       setMessage("Network error — please retry.");
     } finally {

@@ -1,6 +1,6 @@
 import { taskTickSchema } from "@/lib/shared/caregiver-schemas";
 import { applyTaskTick, NotAssignedError } from "@/lib/server/caregiver/mutations";
-import { requireSubject } from "@/lib/server/auth/require-auth";
+import { requireSubject, limitWrites } from "@/lib/server/auth/require-auth";
 import { parseBody } from "@/lib/server/http";
 
 // PATCH /api/v1/bookings/{id}/tasks — task tick (§8). The full tick set is sent
@@ -9,6 +9,10 @@ import { parseBody } from "@/lib/server/http";
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const auth = await requireSubject(req, "caregiver");
   if (auth instanceof Response) return auth;
+
+  // Runaway-loop guard, per authenticated account (§10.3).
+  const limited = await limitWrites(auth);
+  if (limited) return limited;
 
   const bookingId = Number((await ctx.params).id);
   if (!Number.isInteger(bookingId) || bookingId <= 0) {

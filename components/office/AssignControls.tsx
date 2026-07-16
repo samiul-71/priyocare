@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { staffAuthHeader } from "@/lib/shared/client-tokens";
+import { dispatchAction } from "@/app/(office)/actions";
 
 /**
  * Dispatch controls (PRD §9, AC 3.1). Ops picks from the ranked eligible list;
@@ -39,18 +39,15 @@ export function AssignControls({
     setSubmitting(true);
     setResult(null);
     try {
-      const res = await fetch(`/api/v1/office/bookings/${bookingId}/dispatch`, {
-        method: "POST",
-        headers: { "content-type": "application/json", ...staffAuthHeader() },
-        body: JSON.stringify({
-          caregiverId: selected,
-          ...(isOverride ? { reason } : {}),
-        }),
+      const res = await dispatchAction(bookingId, {
+        caregiverId: selected,
+        ...(isOverride ? { reason } : {}),
       });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) setResult({ ok: true, message: "Caregiver dispatched." });
-      else if (res.status === 401) setResult({ ok: false, message: "Sign in as staff to dispatch." });
-      else setResult({ ok: false, message: data?.error?.message ?? "Could not dispatch." });
+      setResult(
+        res.ok
+          ? { ok: true, message: "Caregiver dispatched." }
+          : { ok: false, message: res.error },
+      );
     } catch {
       setResult({ ok: false, message: "Network error — please retry." });
     } finally {

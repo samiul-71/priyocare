@@ -1,5 +1,5 @@
 import { verifyStepSchema } from "@/lib/shared/office-schemas";
-import { requireStaff } from "@/lib/server/auth/require-auth";
+import { requireStaff, limitWrites } from "@/lib/server/auth/require-auth";
 import {
   activateCaregiver,
   transitionVerificationStep,
@@ -15,6 +15,10 @@ export async function POST(
 ) {
   const auth = await requireStaff(req);
   if (auth instanceof Response) return auth;
+
+  // Runaway-loop guard, per authenticated account (§10.3).
+  const limited = await limitWrites(auth);
+  if (limited) return limited;
 
   const parsed = await parseBody(req, verifyStepSchema);
   if (!parsed.ok) return parsed.response;

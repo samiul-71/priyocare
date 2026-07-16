@@ -2,6 +2,8 @@ import "server-only";
 
 import { verifyAccessToken } from "./tokens";
 import type { AccessClaims, StaffRole, SubjectType } from "./tokens";
+import { RATE_LIMITS, rateLimiter } from "./rate-limit";
+import { tooManyRequests } from "../http";
 
 /**
  * Route-handler auth gate (PRD §10). Access tokens are Bearer tokens in the
@@ -58,4 +60,25 @@ export async function requireStaff(
   if (result instanceof Response) return result;
   if (role && result.role !== role) return forbidden();
   return result;
+}
+
+/**
+ * Per-account write limit for an authenticated actor (§10.3, module 09 §11).
+ *
+ * Keyed by the verified subject, not the IP: a whole Ops floor shares one
+ * office IP, so an IP limit would throttle the team on a busy morning while
+ * doing nothing about one runaway client. Returns a 429 Response or null.
+ *
+ * Deliberately generous — this is a runaway-loop guard, not a security control.
+ * The things that actually matter (auth, price, capacity, idempotency) are
+ * enforced by their own rules; a limiter is the wrong place to defend any of
+ * them, and a tight limit here would only break honest bulk work.
+ */
+export async function limitWrites(claims: AccessClaims): Promise<Response | null> {
+  const limit = await rateLimiter.check(
+    `write:${claims.st}:${claims.sub}`,
+    RATE_LIMITS.writePerAccount.limit,
+    RATE_LIMITS.writePerAccount.windowMs,
+  );
+  return limit.allowed ? null : tooManyRequests(limit.retryAfterMs);
 }

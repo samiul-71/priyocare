@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { staffAuthHeader } from "@/lib/shared/client-tokens";
+import { issuePinAction, verifyStepAction } from "@/app/(office)/actions";
 
 /**
  * The verification checklist and the two gated actions (§12.2, AC 2.1/2.2).
@@ -56,13 +56,9 @@ export function VerificationChecklist({
     setBusy(step);
     setError(null);
     try {
-      const res = await fetch(`/api/v1/office/caregivers/${caregiverId}/verify`, {
-        method: "POST",
-        headers: { "content-type": "application/json", ...staffAuthHeader() },
-        body: JSON.stringify({ step }),
-      });
+      const res = await verifyStepAction(caregiverId, { step });
       if (!res.ok) {
-        setError(res.status === 401 ? "Session expired — sign in again." : "Could not save the step.");
+        setError(res.error);
         return;
       }
       router.refresh(); // the server re-evaluated activation; re-read it
@@ -77,17 +73,13 @@ export function VerificationChecklist({
     setBusy("pin");
     setError(null);
     try {
-      const res = await fetch(`/api/v1/office/caregivers/${caregiverId}/pin`, {
-        method: "POST",
-        headers: staffAuthHeader(),
-      });
-      const data = await res.json().catch(() => ({}));
+      const res = await issuePinAction(caregiverId);
       if (res.ok) {
-        setPin(data.pin); // shown once — never fetchable again
+        setPin(res.data.pin); // shown once — never fetchable again
         router.refresh();
         return;
       }
-      setError(data?.error?.message ?? "Could not issue a PIN.");
+      setError(res.error);
     } catch {
       setError("Network error — please retry.");
     } finally {
@@ -213,15 +205,11 @@ function ActivateButton({
     setBusy("activate");
     setError(null);
     try {
-      // The verify endpoint re-evaluates and flips the status when the
+      // The action re-evaluates the gate and flips the status when the
       // checklist passes; re-posting a completed step is idempotent.
-      const res = await fetch(`/api/v1/office/caregivers/${caregiverId}/verify`, {
-        method: "POST",
-        headers: { "content-type": "application/json", ...staffAuthHeader() },
-        body: JSON.stringify({ step: "interview" }),
-      });
+      const res = await verifyStepAction(caregiverId, { step: "interview" });
       if (!res.ok) {
-        setError("Could not activate.");
+        setError(res.error);
         return;
       }
       router.refresh();

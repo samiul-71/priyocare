@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { phoneBookingSchema } from "@/lib/shared/office-schemas";
-import { SERVICE_SEED, ZONES } from "@/lib/shared/catalogue-seed";
-import { staffAuthHeader } from "@/lib/shared/client-tokens";
+import { createPhoneBookingAction } from "@/app/(office)/actions";
+import type { CatalogueService } from "@/lib/server/catalogue/queries";
 
 /**
  * Manual phone booking form (P0, PRD §3.1). Supports ANY of the services —
@@ -11,15 +11,21 @@ import { staffAuthHeader } from "@/lib/shared/client-tokens";
  * on the call. Validates client-side against the SAME shared Zod schema the
  * handler uses, then POSTs to /api/v1/office/bookings.
  *
- * NOTE: service/zone options are the seed order here; provisional ids (service
- * sort_order, zone index) match a freshly seeded DB. Once module 09 ships
- * GET /api/v1/services, this fetches real ids.
+ * Services and zones come from the database via the page (module 09). They were
+ * previously derived from the seed's sort order — ids that are right only on a
+ * freshly seeded database, and silently book the wrong service anywhere else.
  */
 const PAYMENT_METHODS = ["bkash", "nagad", "rocket", "card", "cash"] as const;
 
 type FieldErrors = Record<string, string[]>;
 
-export function PhoneBookingForm() {
+export function PhoneBookingForm({
+  services,
+  zones,
+}: {
+  services: CatalogueService[];
+  zones: { id: number; name: string }[];
+}) {
   const [errors, setErrors] = useState<FieldErrors>({});
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -27,8 +33,10 @@ export function PhoneBookingForm() {
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setResult(null);
-    const form = new FormData(e.currentTarget);
-    const raw = Object.fromEntries(form.entries());
+    // Captured before the first await: React pools the event, so
+    // `e.currentTarget` is null by the time the action resolves.
+    const form = e.currentTarget;
+    const raw = Object.fromEntries(new FormData(form).entries());
 
     const parsed = phoneBookingSchema.safeParse(raw);
     if (!parsed.success) {
@@ -43,19 +51,13 @@ export function PhoneBookingForm() {
     setErrors({});
     setSubmitting(true);
     try {
-      const res = await fetch("/api/v1/office/bookings", {
-        method: "POST",
-        headers: { "content-type": "application/json", ...staffAuthHeader() },
-        body: JSON.stringify(parsed.data),
-      });
-      const data = await res.json().catch(() => ({}));
+      const res = await createPhoneBookingAction(parsed.data);
       if (res.ok) {
-        setResult({ ok: true, message: `Booking created: ${data.bookingCode}` });
-        e.currentTarget.reset();
-      } else if (res.status === 401) {
-        setResult({ ok: false, message: "Sign in as staff to create a booking." });
+        setResult({ ok: true, message: `Booking created: ${res.data.bookingCode}` });
+        form.reset();
       } else {
-        setResult({ ok: false, message: data?.error?.message ?? "Could not create booking." });
+        setResult({ ok: false, message: res.error });
+        if (res.fields) setErrors(res.fields);
       }
     } catch {
       setResult({ ok: false, message: "Network error — please retry." });
@@ -94,8 +96,8 @@ export function PhoneBookingForm() {
         <label className="block text-sm" htmlFor="serviceId">Service</label>
         <select id="serviceId" name="serviceId" className={fieldClass} defaultValue="">
           <option value="" disabled>Choose a service…</option>
-          {SERVICE_SEED.map((s) => (
-            <option key={s.slug} value={s.sortOrder}>
+          {services.map((s) => (
+            <option key={s.id} value={s.id}>
               {s.nameEn}
               {!s.isActive ? " (phone only)" : ""}
             </option>
@@ -106,8 +108,8 @@ export function PhoneBookingForm() {
         <label className="mt-3 block text-sm" htmlFor="zoneId">Zone</label>
         <select id="zoneId" name="zoneId" className={fieldClass} defaultValue="">
           <option value="" disabled>Choose a zone…</option>
-          {ZONES.map((z, i) => (
-            <option key={z} value={i + 1}>{z}</option>
+          {zones.map((z) => (
+            <option key={z.id} value={z.id}>{z.name}</option>
           ))}
         </select>
         {err("zoneId")}

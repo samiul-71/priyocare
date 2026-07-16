@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { LEAD_STAGES, STAGE_LABEL, isClosed, validateStageChange } from "@/lib/shared/leads";
 import type { LeadStage } from "@/lib/shared/leads";
-import { staffAuthHeader } from "@/lib/shared/client-tokens";
+import { updateLeadAction } from "@/app/(office)/actions";
 
 /**
  * Advance a lead from its card (AC-3.1). A <select> + button, not drag-and-drop:
@@ -44,13 +44,9 @@ export function LeadStageControls({
 
     setBusy(true);
     try {
-      const res = await fetch(`/api/v1/office/leads/${leadId}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json", ...staffAuthHeader() },
-        body: JSON.stringify({
-          stage: target,
-          ...(needsReason ? { lostReason } : {}),
-        }),
+      const res = await updateLeadAction(leadId, {
+        stage: target,
+        ...(needsReason ? { lostReason } : {}),
       });
       if (res.ok) {
         setTarget("");
@@ -58,12 +54,7 @@ export function LeadStageControls({
         router.refresh(); // re-render the board from the server
         return;
       }
-      if (res.status === 401) {
-        setError("Session expired — sign in again.");
-        return;
-      }
-      const data = await res.json().catch(() => ({}));
-      setError(data?.error?.message ?? "Could not update the lead.");
+      setError(res.error);
     } catch {
       setError("Network error — please retry.");
     } finally {

@@ -1,5 +1,5 @@
 import { phoneBookingSchema } from "@/lib/shared/office-schemas";
-import { requireStaff } from "@/lib/server/auth/require-auth";
+import { requireStaff, limitWrites } from "@/lib/server/auth/require-auth";
 import { createPhoneBooking } from "@/lib/server/office/mutations";
 import { parseBody } from "@/lib/server/http";
 
@@ -8,6 +8,10 @@ import { parseBody } from "@/lib/server/http";
 export async function POST(req: Request) {
   const auth = await requireStaff(req);
   if (auth instanceof Response) return auth;
+
+  // Runaway-loop guard, per authenticated account (§10.3).
+  const limited = await limitWrites(auth);
+  if (limited) return limited;
 
   const parsed = await parseBody(req, phoneBookingSchema);
   if (!parsed.ok) return parsed.response;

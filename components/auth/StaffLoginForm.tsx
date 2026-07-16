@@ -3,17 +3,18 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { staffLoginSchema } from "@/lib/shared/auth-schemas";
-import { storeStaffTokens } from "@/lib/shared/client-tokens";
+import { signInStaffAction } from "@/app/(auth)/actions";
 import { Button } from "@/components/ui/Button";
 
 /**
- * Staff login form. Validates against the SAME shared Zod schema the handler
- * uses (§10.3, no drift), then POSTs to /api/v1/auth/staff/login.
+ * Staff login form. Validates against the SAME shared Zod schema the action
+ * uses (§10.3, no drift), then calls a Server Action.
  *
- * That one response does both halves of the hybrid model: it sets the httpOnly
- * page-session cookie (which is what actually unlocks /office/*) and returns the
- * Bearer pair the office forms need for API calls. The cookie is invisible to
- * this component by design — it can never read or forge it.
+ * The action issues the httpOnly cookie and NOTHING else (module 09). This form
+ * used to POST the API login and stash the returned Bearer pair in
+ * localStorage, where any XSS on the origin could read it. Now no API
+ * credential ever reaches the browser: the cookie is invisible to this
+ * component, which can neither read nor forge it.
  */
 type FieldErrors = Record<string, string[]>;
 
@@ -41,27 +42,16 @@ export function StaffLoginForm({ returnTo }: { returnTo: string }) {
     setSubmitting(true);
 
     try {
-      const res = await fetch("/api/v1/auth/staff/login", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(parsed.data),
-      });
-      const data = await res.json().catch(() => ({}));
-
-      if (res.ok) {
-        storeStaffTokens({ accessToken: data.accessToken, refreshToken: data.refreshToken });
+      const result = await signInStaffAction(parsed.data);
+      if (result.ok) {
         router.push(returnTo);
-        // The cookie arrived with this response; refresh so the destination
+        // The cookie was set by the action; refresh so the destination
         // re-renders on the server as a signed-in staff member.
         router.refresh();
         return;
       }
-      if (res.status === 429) {
-        setMessage("Too many attempts. Wait a few minutes and try again.");
-      } else {
-        // 401 is deliberately vague — never reveal whether the email exists.
-        setMessage(data?.error?.message ?? "Wrong email or password.");
-      }
+      // Deliberately vague — never reveal whether the email exists.
+      setMessage(result.error);
     } catch {
       setMessage("Network error — please retry.");
     } finally {

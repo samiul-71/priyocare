@@ -119,6 +119,38 @@ export const requireStaffPage = cache(async (role?: StaffRole): Promise<StaffPag
   return { staffId: staff.id, role: staff.role, name: staff.name, email: staff.email };
 });
 
+/**
+ * The staff actor for a Server Action — same checks as `requireStaffPage`
+ * (valid cookie AND the account still active), but it RETURNS null instead of
+ * redirecting.
+ *
+ * A redirect is right for a page render and wrong for a form submit: the form
+ * needs to say "your session expired" next to the button she just pressed,
+ * keeping what she typed, rather than throwing the work away mid-navigation.
+ *
+ * Server Actions are POST-only and Next verifies Origin against Host, so the
+ * cookie authorising them does not reopen CSRF.
+ */
+export const getStaffActor = cache(async (): Promise<StaffPageSession | null> => {
+  const session = await getPageSession();
+  if (!session || session.st !== "staff") return null;
+
+  const [staff] = await getDb()
+    .select({
+      id: staffAccounts.id,
+      role: staffAccounts.role,
+      name: staffAccounts.name,
+      email: staffAccounts.email,
+      isActive: staffAccounts.isActive,
+    })
+    .from(staffAccounts)
+    .where(eq(staffAccounts.id, Number(session.sub)))
+    .limit(1);
+
+  if (!staff || !staff.isActive) return null;
+  return { staffId: staff.id, role: staff.role, name: staff.name, email: staff.email };
+});
+
 export interface CaregiverPageSession {
   caregiverId: number;
   name: string;
