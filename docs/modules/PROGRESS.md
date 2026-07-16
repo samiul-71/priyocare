@@ -15,7 +15,7 @@ Legend: ✅ complete · 🚧 in progress · ⬜ not started
 | 05 | Customer Tracking & Reports | ✅ | `eec3cbd` | Status steppers (colour-independent), 15-min signed report links, geofence invisibility; `/bookings/[id]/track` + `/status` |
 | — | Page auth guards + login pages | ✅ | `79809b7` | `pc_session` cookie, DAL guards on every `/office` + `/caregiver` page, `/office/login` + `/caregiver/login` |
 | 06 | Lead Capture & CRM (lead) | ✅ | `187ef14` | `/enquiry/[service]` + `/office/leads` Kanban, overdue pinning, 30-day dormancy, archetype gate |
-| 07 | Caregiver PWA (offline-first) | ✅ | _pinned below_ | IndexedDB queue, idempotent sync, advisory geofence, service worker; `/caregiver/today` + tasks/scan/care-log |
+| 07 | Caregiver PWA (offline-first) | ✅ | `5cd3778` | IndexedDB queue, idempotent sync, advisory geofence, service worker; `/caregiver/today` + tasks/scan/care-log |
 | 09 | API Layer | ⬜ | — | Route handlers consolidated; partly built alongside 03/04/08 |
 
 ## Next up
