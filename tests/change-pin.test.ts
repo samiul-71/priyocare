@@ -1,6 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { changePinSchema, newPinSchema } from "../lib/shared/auth-schemas.ts";
+import {
+  changePinSchema,
+  newPinSchema,
+  resetPinWithOtpSchema,
+} from "../lib/shared/auth-schemas.ts";
 
 /*
  * First-login PIN change (§12.2). The gap this closes: the initial PIN is read
@@ -73,4 +77,51 @@ test("an Ops-issued PIN is still accepted as the CURRENT one", () => {
     changePinSchema.safeParse({ currentPin: "123456", newPin: "7361" }).success,
     true,
   );
+});
+
+/* ------------------------------------ self-service reset (§10.1 OTP fallback) */
+
+test("a reset needs a 6-digit code, a valid phone, and a strong new PIN", () => {
+  const ok = resetPinWithOtpSchema.safeParse({
+    phone: "01711111111",
+    code: "483920",
+    newPin: "7361",
+  });
+  assert.equal(ok.success, true);
+  assert.equal(ok.data?.phone, "+8801711111111"); // normalised like everywhere else
+});
+
+test("a reset rejects a malformed code", () => {
+  for (const code of ["12345", "1234567", "abcdef", ""]) {
+    assert.equal(
+      resetPinWithOtpSchema.safeParse({ phone: "01711111111", code, newPin: "7361" }).success,
+      false,
+      code,
+    );
+  }
+});
+
+test("a reset applies the same PIN-strength rule as a chosen change", () => {
+  // The OTP proves the phone, not good judgement — "1234" is still refused.
+  assert.equal(
+    resetPinWithOtpSchema.safeParse({ phone: "01711111111", code: "483920", newPin: "1234" })
+      .success,
+    false,
+  );
+  assert.equal(
+    resetPinWithOtpSchema.safeParse({ phone: "01711111111", code: "483920", newPin: "0000" })
+      .success,
+    false,
+  );
+});
+
+test("a reset has no current PIN — that is the point", () => {
+  // She forgot it; requiring it would defeat the flow. The OTP is the proof.
+  const parsed = resetPinWithOtpSchema.safeParse({
+    phone: "01711111111",
+    code: "483920",
+    newPin: "7361",
+  });
+  assert.equal(parsed.success, true);
+  assert.ok(!Object.keys(parsed.data ?? {}).includes("currentPin"));
 });

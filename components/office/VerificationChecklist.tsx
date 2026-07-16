@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { issuePinAction, verifyStepAction } from "@/app/(office)/actions";
+import { issuePinAction, resetPinAction, verifyStepAction } from "@/app/(office)/actions";
 
 /**
  * The verification checklist and the two gated actions (§12.2, AC 2.1/2.2).
@@ -87,6 +87,24 @@ export function VerificationChecklist({
     }
   }
 
+  async function resetPin() {
+    setBusy("reset");
+    setError(null);
+    try {
+      const res = await resetPinAction(caregiverId);
+      if (res.ok) {
+        setPin(res.data.pin);
+        router.refresh();
+        return;
+      }
+      setError(res.error);
+    } catch {
+      setError("Network error — please retry.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   if (pin) {
     return (
       <div role="status" className="rounded-lg border border-navy bg-navy-50 p-5">
@@ -154,11 +172,24 @@ export function VerificationChecklist({
             <ActivateButton caregiverId={caregiverId} busy={busy} setBusy={setBusy} setError={setError} />
           </>
         ) : hasPin ? (
-          <p className="text-sm text-teal-900">
-            <span aria-hidden="true">● </span>
-            Active with a login. To replace a lost PIN, reset it — re-issuing is refused so a working
-            caregiver is never locked out mid-shift.
-          </p>
+          <>
+            <p className="text-sm text-teal-900">
+              <span aria-hidden="true">● </span>
+              Active with a login.
+            </p>
+            <p className="mt-2 text-xs text-text-muted">
+              Forgotten her PIN? Reset it — nobody can look the old one up. Check who you are
+              speaking to first: this hands out a working credential.
+            </p>
+            <button
+              type="button"
+              onClick={resetPin}
+              disabled={busy !== null}
+              className="mt-3 min-h-9 rounded-md border border-border px-4 text-sm font-medium text-navy disabled:opacity-50"
+            >
+              {busy === "reset" ? "Resetting…" : "Reset PIN"}
+            </button>
+          </>
         ) : (
           <>
             <p className="text-sm font-medium text-teal-900">

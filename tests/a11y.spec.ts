@@ -24,6 +24,7 @@ const routes = [
   "/",
   "/office/login",
   "/caregiver/login",
+  "/caregiver/forgot-pin",
   "/book/nursing/select",
   "/book/checkout",
   "/book/confirmation",

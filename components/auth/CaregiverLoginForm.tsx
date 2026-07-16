@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { caregiverLoginSchema } from "@/lib/shared/auth-schemas";
 import { storeCaregiverTokens } from "@/lib/shared/client-tokens";
@@ -138,6 +139,13 @@ export function CaregiverLoginForm({ returnTo }: { returnTo: string }) {
           {message}
         </p>
       )}
+
+      {/* A reset nobody can find is not a reset. */}
+      <p className="mt-5 text-center text-base">
+        <Link href="/caregiver/forgot-pin" className="text-teal-900 underline">
+          পিন ভুলে গেছেন?
+        </Link>
+      </p>
     </form>
   );
 }

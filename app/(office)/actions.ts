@@ -17,6 +17,7 @@ import {
   LeadNotFoundError,
   updateLead,
 } from "@/lib/server/leads/mutations";
+import { resetCaregiverPin } from "@/lib/server/caregiver/pin";
 import {
   createCaregiverSchema,
   dispatchSchema,
@@ -208,6 +209,36 @@ export async function issuePinAction(caregiverId: number): Promise<ActionResult<
     ok: false,
     error: `Cannot issue a PIN yet — outstanding: ${result.missing?.join(", ")}`,
   };
+}
+
+/**
+ * Reset a forgotten PIN (§12.2). Separate from `issuePinAction`, which refuses
+ * once a PIN exists — that refusal protects a working caregiver from being
+ * locked out by a stray click, so getting her back in must be a deliberate act,
+ * not a retry.
+ *
+ * Ops verifies who they are talking to the same way they did at the interview.
+ * The new PIN is must-change, so their knowledge of it lasts only until her
+ * next sign-in — and every session the old PIN opened is revoked here.
+ */
+export async function resetPinAction(caregiverId: number): Promise<ActionResult<{ pin: string }>> {
+  const staff = await getStaffActor();
+  if (!staff) return SESSION_EXPIRED;
+
+  const result = await resetCaregiverPin(caregiverId);
+  if (!result.ok) {
+    return {
+      ok: false,
+      error:
+        result.reason === "not_approved"
+          ? "This caregiver is not active — reinstate them before resetting a PIN."
+          : "Caregiver not found.",
+    };
+  }
+
+  revalidatePath(`/office/caregivers/${caregiverId}/verify`);
+  revalidatePath("/office/caregivers");
+  return { ok: true, data: { pin: result.pin } };
 }
 
 /* ---------------------------------------------------------------- session */

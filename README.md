@@ -24,6 +24,8 @@ Trusted home healthcare in Dhaka — **one Next.js application, one repository, 
 
 - **Force PIN change on first login** ✅ closes the admin-issued-PIN gap: Ops reads the initial PIN out, so until she replaces it they know her credential. Every caregiver page now diverts to `/caregiver/change-pin` until she does. Crucially, the change **revokes what the old PIN opened** — refresh tokens outright, and the stateless page cookie via a `pin_changed_at` stamp the guard compares against the session's `iat`. *(9 unit tests. Verified by performing the attack: Ops signed in as her with the issued PIN, she changed it, Ops' cookie → login and their refresh token → 401; old PIN 401, new PIN 200.)*
 
+- **PIN reset** ✅ two routes, because they fail differently — a lost phone breaks OTP, a Saturday night breaks the office. **Ops-mediated** (`/office/caregivers/{id}/pin/reset`, works today, new PIN is must-change) and **self-service OTP** (`/caregiver/forgot-pin`, built behind the `SmsSender` seam — module 03's OTP service was already complete, only the provider adapter is missing). The request endpoint **always answers 200** so it can't become a directory of who works here. With no provider the page shows the hotline rather than a form that could never deliver. *(4 unit tests; verified live: Ops reset kills her live session, old PIN 401, Ops-issued PIN diverts to change-pin; self-service lands her straight on her job, wrong code 401, weak PIN 422, replayed code 401.)*
+
 See [`docs/modules/PROGRESS.md`](docs/modules/PROGRESS.md) for the ordered status of every module. Everything else is specced in `docs/modules/` and built on top of these.
 
 ### Auth architecture (module 03)
@@ -53,6 +55,7 @@ Login screens live in the `(auth)` route group, deliberately **outside** the gua
 |---|---|---|
 | `DATABASE_URL` | Drizzle client, migrations, seed | Postgres connection string |
 | `JWT_SECRET` | access-token **and** page-session-cookie signing | ≥32 chars; rotate on suspected exposure / contractor offboarding. Rotating it invalidates both, signing everyone out — expected. |
+| `SMS_PROVIDER_CONFIGURED` | the OTP flows | Set to `1` in production only once a real `SmsSender` is wired (§19). Until then `/caregiver/forgot-pin` shows the hotline instead of a form that cannot deliver, and the console sender **throws** in production rather than pretending to send. |
 
 Locally these live in `.env.local`. `next dev|build` reads it automatically; the plain-Node scripts (`drizzle.config.ts`, `db:seed`, `db:create-staff`) call `process.loadEnvFile(".env.local")` themselves and fall back to real env vars on the VPS.
 

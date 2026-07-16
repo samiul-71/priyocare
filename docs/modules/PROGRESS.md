@@ -19,10 +19,22 @@ Legend: ✅ complete · 🚧 in progress · ⬜ not started
 | — | Caregiver onboarding (unblocks 07) | ✅ | `a15dc0b` | Intake → checklist → payout → activate → **PIN issuance**; `/office/caregivers` + `/[id]/verify` |
 | 09 | API Layer | ✅ | `e8aeefa` | Booking idempotency, `GET /services`, sample scan, write limits, **office Bearer→cookie**, `docs/api.md` |
 | — | Force PIN change on first login | ✅ | `59e1cee` | Closes the admin-issued-PIN gap; revokes sessions predating the change |
+| — | PIN reset (Ops + self-service OTP) | ✅ | _pinned below_ | `/caregiver/forgot-pin` + Ops reset; degrades honestly with no SMS provider |
 
 ## Next up
 
 **All nine modules are built.** What remains is provider-blocked or tracked below: Redis (rate limits + the scheduled jobs), the storage provider (report/document upload), the SMS/OTP provider (now needed only for **PIN reset**, not the first-login change), and the payment gateway's webhook shape. Then §10.7's external pentest / OWASP pass.
+
+### PIN reset — what's full vs. deferred
+
+A caregiver who forgot her PIN had no route back in: nothing stores it, and re-issue is refused while one exists. **Two routes now, because they fail differently** — a lost phone breaks OTP, and a Saturday night breaks the office.
+
+- **Ops-mediated (works today, no provider):** `POST /office/caregivers/{id}/pin/reset` + a Reset button on the verify page. A **separate operation from issuance**, which still refuses once a PIN exists — that refusal protects a working caregiver from a stray click, so getting her back in has to be deliberate and named in the audit trail. Same trust model as onboarding and no weaker: Ops interviewed her and checked her NID; verifying her by phone is what they already do. The new PIN is `must_change`, so their knowledge of it expires at her next sign-in.
+- **Self-service (built, needs only the provider):** `/caregiver/forgot-pin` → OTP → new PIN → signed straight in. `pin_must_change` is **false** here, unlike the Ops path — nobody else ever saw this PIN, and that asymmetry is the whole reason the flow is worth having. Module 03's OTP service was already complete (issue/verify/TTL/attempt lockout); only the `SmsSender` adapter is missing, so this is tested end to end in dev against the console sender.
+- **The request endpoint always answers 200**, known phone or not. "Not a caregiver" would turn an unauthenticated form into a directory of who works here — and these are women whose home addresses are in this system. A suspended caregiver also gets the same 200 and no code (Flow C).
+- **Honest degradation:** `/caregiver/forgot-pin` asks `isSmsConfigured()` and shows the hotline instead of a form that could never deliver. A screen saying "we sent you a code" when nothing was sent is worse than no screen — she stands there waiting instead of ringing, and nobody finds out until she misses a shift. The console sender now **throws in production** rather than silently no-opping, for the same reason.
+- **Both routes revoke everything the old PIN opened** — a forgotten PIN may mean a lost phone. Verified live: her live session died on Ops reset; old PIN 401; the Ops-issued PIN signs in but is diverted to change-pin; the self-service path lands her straight on her job with `must_change=false`; a wrong code 401, a weak new PIN 422 even with the right code, and a replayed code 401 (single-use).
+- **Deferred:** the SMS provider itself (§19) — one adapter behind `SmsSender`. **Staff passwords still have no reset**: admin-set at creation, never rotated, no forgot-password flow. Tracked below.
 
 ### Force PIN change on first login — what's full vs. deferred
 
@@ -100,7 +112,8 @@ Closed the gap where `/office/*` and `/caregiver/*` pages were viewable by anyon
 - [x] **Page-level auth guards + login pages** — done (see above). Customer `/book/*` stays intentionally public (guest booking, Flow A).
 - [x] **Caregiver onboarding** — done (see above). The PIN is only ever set on a caregiver who passes the full §12.2 gate.
 - [x] **Change PIN on first login** — done (see below). It turned out **not** to need SMS: that is only required for *reset* (forgot PIN), which is still open.
-- [ ] **PIN reset (forgot PIN).** Needs the SMS/OTP provider (§10.1's fallback, §19). Today a caregiver who forgets her PIN has no route back in — Ops cannot look it up (nothing stores it) and re-issue is refused while one exists. The honest interim answer is that Ops clears `pin_hash` in the database, which is not a workflow anyone should rely on.
+- [x] **PIN reset (forgot PIN)** — done, both routes (see below). Only the SMS *provider adapter* is still missing; the self-service flow is built and tested behind the `SmsSender` seam and works the moment one is wired.
+- [ ] **Staff password reset / rotation.** Staff passwords are admin-set by `db:create-staff` and never change — no forgot-password, no rotation, no forced change. Caregivers now have both a forced first-login change and two reset routes; the people with the *most* access have neither.
 - [ ] **Reject a caregiver with a reason.** `verification_status` has `rejected` and nothing sets it — a failed police check currently has no recorded outcome.
 - [x] **Get Bearer tokens out of the browser** — done for the office (Server Actions). The caregiver PWA keeps one by necessity; see `lib/shared/client-tokens.ts`. The office forms keep the access + refresh pair in `localStorage` (`lib/shared/client-tokens.ts`) because `/api/v1/office/*` authenticates with Bearer headers. Any XSS on the origin can read them; the page cookie is httpOnly and cannot. The real fix is to make office mutations **Server Actions authorised by the cookie**, leaving Bearer for genuine API clients — a module 09 refactor, since it changes every office handler's entry point.
 - [ ] **A missing `JWT_SECRET` silently signs everyone out.** `verifyPageSession`/`verifyAccessToken` catch *all* errors and return null, including the "JWT_SECRET must be set" throw — so a misconfigured deploy would redirect every user to login rather than failing loudly. Fail fast at boot instead (pre-existing in `tokens.ts`; the page session inherits it).

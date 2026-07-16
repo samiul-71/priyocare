@@ -82,6 +82,16 @@ test("guard: the change-PIN screen is not viewable signed out", async ({ page })
   await expect(page).toHaveURL(/\/caregiver\/login/);
 });
 
+/**
+ * Forgotten-PIN is necessarily public — she cannot sign in, that is the problem
+ * — and it must be reachable FROM the login screen, or it may as well not exist.
+ */
+test("the forgotten-PIN route is public and linked from caregiver login", async ({ page }) => {
+  await page.goto("/caregiver/login");
+  await page.getByRole("link", { name: "পিন ভুলে গেছেন?" }).click();
+  await expect(page).toHaveURL(/\/caregiver\/forgot-pin$/);
+});
+
 // Flow C's front door: an enquiry must never sit behind a login.
 test("the enquiry form stays public", async ({ page }) => {
   await page.goto("/enquiry/medical-tourism");

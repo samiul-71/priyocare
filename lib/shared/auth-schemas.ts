@@ -62,6 +62,18 @@ export const newPinSchema = z
   .refine((pin) => !TRIVIAL_PIN.test(pin), "Do not use the same digit repeated")
   .refine((pin) => !isSequential(pin), "Do not use a run like 1234");
 
+/**
+ * Self-service reset (§10.1's OTP fallback). The OTP proves she holds the
+ * phone; there is no current PIN to prove anything with, which is the point —
+ * she forgot it.
+ */
+export const resetPinWithOtpSchema = z.object({
+  phone: bdPhone,
+  code: z.string().trim().regex(/^\d{6}$/, "The code is 6 digits"),
+  newPin: newPinSchema,
+});
+export type ResetPinWithOtpInput = z.infer<typeof resetPinWithOtpSchema>;
+
 /** Change PIN (first login, §12.2). The current PIN proves it is her. */
 export const changePinSchema = z
   .object({
