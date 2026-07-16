@@ -23,7 +23,9 @@ Legend: ✅ complete · 🚧 in progress · ⬜ not started
 
 ## Next up
 
-**All nine modules are built.** What remains is provider-blocked or tracked below: Redis (rate limits + the scheduled jobs), the storage provider (report/document upload), the SMS/OTP provider (now needed only for **PIN reset**, not the first-login change), and the payment gateway's webhook shape. Then §10.7's external pentest / OWASP pass.
+**All nine modules are built.** What remains is provider-blocked or tracked below: Redis (rate limits across processes + the scheduled jobs), the storage provider (report/document upload), the **SMS adapter** — now the only thing standing between the built self-service PIN reset and it working, since Ops-mediated reset covers the need today — and the payment gateway's webhook shape. Then §10.7's external pentest / OWASP pass.
+
+The largest remaining *code* gap is **staff password reset/rotation**: caregivers now have a forced first-login change and two reset routes; the people with the most access have none of it.
 
 ### PIN reset — what's full vs. deferred
 
@@ -43,7 +45,7 @@ Closes the trade-off onboarding recorded: the initial PIN is read out by Ops, so
 - **Full:** `pin_must_change` + `pin_changed_at` (migration 0003, **with a backfill** — every PIN that existed was Ops-issued, so defaulting them to `false` would have exempted exactly the caregivers this protects); `requireCaregiverPage` diverts every caregiver page to `/caregiver/change-pin` until she replaces it; the change screen lives in `(auth)`, outside the guard that points at it (the login-loop rule again); a chosen PIN cannot be a repeated digit or a run like 1234 — the *first* guesses, not a general strength regime, since more rules just move the PIN onto the phone case. 9 unit tests.
 - **The half that is easy to miss:** changing the PIN must **revoke what the old one opened**, or the change is theatre. Refresh tokens are rows → revoked outright. The page cookie is a stateless JWT with nothing to revoke → `pin_changed_at` is stamped and the guard refuses any session whose `iat` precedes it. Verified live by actually doing the attack: **Ops signed in as her with the issued PIN, she changed it, and Ops' cookie → 307 to login while their refresh token → 401.** Old PIN 401, new PIN 200 into her job.
 - **§10.1 is not violated:** the rule is that TOKEN EXPIRY must never wall off a working shift. This is one-time setup on a brand-new account, before any work exists — her queue is empty by definition, because she could not open the app until now.
-- **Deferred:** **PIN reset** (forgot PIN) needs the SMS/OTP fallback — see the follow-up above. Staff passwords have no equivalent flow either; they are admin-set at creation and never rotated.
+- **Follow-on, now built:** PIN reset — both an Ops-mediated route that works today and a self-service OTP one (`56475f8`, section above). Staff passwords still have no equivalent: admin-set at creation, never rotated, no reset. Tracked in the follow-ups.
 
 ### Module 09 — what's full vs. deferred
 
