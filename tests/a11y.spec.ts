@@ -13,14 +13,12 @@ import AxeBuilder from "@axe-core/playwright";
  *   /book/checkout  ·  /bookings/[id]/track  ·  /caregiver/today
  *   /caregiver/today/care-log
  *
- * COVERAGE NOTE — /office/* and /caregiver/* used to be listed here and are
- * not any more. They are now behind a page guard whose secure check needs a
- * real staff/caregiver row, and this environment has no Postgres, so they
- * redirect to login. Leaving them in the list would NOT have failed: axe would
- * have followed the redirect and scanned the login page seven times while
- * reporting the office routes as green. Their a11y pass runs on the VPS, where
- * a session exists. What is asserted here instead is that they redirect at all
- * — see auth-guard.spec.ts.
+ * COVERAGE NOTE — this file covers the ANONYMOUS routes. /office/* moved to
+ * a11y-office.spec.ts, which signs in first: they are behind a page guard, and
+ * leaving them here would NOT have failed — axe would have followed the
+ * redirect and scanned the login page while reporting the office routes green.
+ * /caregiver/* still has no authenticated a11y pass (it needs an approved
+ * caregiver row); auth-guard.spec.ts asserts it redirects.
  */
 const routes = [
   "/",

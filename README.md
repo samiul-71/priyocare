@@ -116,7 +116,7 @@ npm run db:create-staff -- --email x@y.z --password '…' [--name N] [--role ops
 ## Guardrails (blocking, same severity as typecheck)
 
 - **Module boundaries** (`eslint-plugin-boundaries`): `(customer)` may never import `components/office` or another group's code; `lib/server` is reachable only by the API. (PRD §4.2)
-- **Accessibility** (`@axe-core/playwright`): zero serious/critical violations on critical routes; contrast is contract, not preference. (PRD §17.9)
+- **Accessibility** (`@axe-core/playwright`): zero serious/critical violations on critical routes; contrast is contract, not preference. (PRD §17.9) The signed-in office pages are scanned by `tests/a11y-office.spec.ts`, which is opt-in — set `E2E_STAFF_EMAIL`/`E2E_STAFF_PASSWORD` to an existing account (it deliberately won't create one) or those specs skip.
 - **Page guards** (`tests/auth-guard.spec.ts`): every `/office/*` and `/caregiver/*` route must redirect to its login screen when signed out. A page that forgets `requireStaffPage()` fails here. (PRD §10.2)
 - **Design tokens are closed**: the default Tailwind colour palette is cleared, so the failing brand teal can never be typed as text. (design.md §2)
 
