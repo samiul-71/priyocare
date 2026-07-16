@@ -13,7 +13,7 @@ import AxeBuilder from "@axe-core/playwright";
  *   /book/checkout  ·  /bookings/[id]/track  ·  /caregiver/today
  *   /caregiver/today/care-log
  */
-const routes = ["/", "/office", "/caregiver"];
+const routes = ["/", "/office", "/office/catalog", "/caregiver"];
 
 for (const route of routes) {
   test(`a11y: ${route} has no serious/critical violations`, async ({ page }) => {

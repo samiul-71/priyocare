@@ -6,7 +6,10 @@ Trusted home healthcare in Dhaka — **one Next.js application, one repository, 
 
 ## Status
 
-**Module 01 — Design System & Application Foundation** is built. It establishes the contrast-safe token system, self-hosted fonts, the three actor shells, the boundary + accessibility CI gates, and the landing page. Everything else is specced in `docs/modules/` and built on top of this.
+- **Module 01 — Design System & Application Foundation** ✅ contrast-safe tokens, self-hosted fonts, three actor shells, boundary + accessibility CI gates, landing page.
+- **Module 02 — Catalogue & Data Model** ✅ full Drizzle schema for all §7 entities (21 tables) + generated migration, Zod schemas with the Bangla-Unicode check (unit-tested), the catalogue seed (5 zones, 8 services, 15 nursing variants), and a read-only `/office/catalog`. *(No Postgres in this environment: the migration is generated offline and the schema/validation are unit-tested; the live DB round-trip — `db:migrate`, `db:seed` — runs on the VPS.)*
+
+Everything else is specced in `docs/modules/` and built on top of these.
 
 ## Documentation
 
@@ -26,8 +29,11 @@ app/
 ├── (caregiver)/          # field PWA, scope "/caregiver/"
 └── (office)/             # admin panel, desktop-first
 components/{ui,customer}/  # ui primitives + customer chrome
-lib/shared/               # framework-agnostic shared code (Zod schemas land here in module 09)
+lib/
+├── shared/               # framework-agnostic: Zod schemas, Bangla check, catalogue seed
+└── server/db/            # server-only Drizzle schema, client, migrations, seed CLI
 proxy.ts                  # route-group auth gating skeleton (Next 16 "Proxy" = old Middleware)
+drizzle.config.ts         # drizzle-kit config
 public/…manifest.webmanifest  # two path-scoped PWA manifests
 tests/a11y.spec.ts        # axe-core accessibility gate
 ```
@@ -35,11 +41,15 @@ tests/a11y.spec.ts        # axe-core accessibility gate
 ## Commands
 
 ```bash
-npm run dev        # dev server
-npm run build      # production build
-npm run start      # serve production build
-npm run lint       # eslint + eslint-plugin-boundaries (cross-actor imports are errors)
-npm run test:a11y  # axe-core: fails on ANY serious/critical violation
+npm run dev         # dev server
+npm run build       # production build
+npm run start       # serve production build
+npm run lint        # eslint + eslint-plugin-boundaries (cross-actor imports are errors)
+npm run test:unit   # node:test unit tests (e.g. the Bangla-Unicode rule)
+npm run test:a11y   # axe-core: fails on ANY serious/critical violation
+npm run db:generate # drizzle-kit: regenerate migration SQL from the schema (offline)
+npm run db:migrate  # apply migrations (needs DATABASE_URL, on the VPS)
+npm run db:seed     # seed zones/services/nursing variants (needs DATABASE_URL)
 ```
 
 ## Guardrails (blocking, same severity as typecheck)
