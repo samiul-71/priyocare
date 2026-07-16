@@ -11,6 +11,13 @@ import {
 } from "../../shared/catalogue-seed";
 import { serviceVariants, services, zones } from "./schema";
 
+// Like drizzle.config.ts: a plain Node process gets no .env.local from Next.
+try {
+  process.loadEnvFile(".env.local");
+} catch {
+  // No .env.local — DATABASE_URL comes from the real environment (the VPS).
+}
+
 async function main() {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL is not set.");

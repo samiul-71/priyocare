@@ -11,7 +11,8 @@
     "test:a11y": "playwright test",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:seed": "tsx lib/server/db/seed.ts"
+    "db:seed": "tsx lib/server/db/seed.ts",
+    "db:create-staff": "tsx --conditions=react-server lib/server/db/create-staff.ts"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.0.2",

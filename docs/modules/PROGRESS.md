@@ -12,15 +12,26 @@ Legend: ✅ complete · 🚧 in progress · ⬜ not started
 | 03 | Auth & Security | ✅ | `9c96272` | JWT + rotating refresh, argon2id, rate limits, `/auth/*`, security headers |
 | 08 | Office / Admin Panel (**phone booking P0**) | ✅ | `e81287d` | Phone booking, dispatch, verify/activate, suspend, alerts; queue/assign/alerts pages |
 | 04 | Customer Booking (visit) | ✅ | `bc75b6b` | Price integrity, race-safe slots, refund tiers, webhook HMAC; `/book/*` select→checkout→confirmation |
-| 05 | Customer Tracking & Reports | ✅ | _this commit_ | Status steppers (colour-independent), 15-min signed report links, geofence invisibility; `/bookings/[id]/track` + `/status` |
+| 05 | Customer Tracking & Reports | ✅ | `eec3cbd` | Status steppers (colour-independent), 15-min signed report links, geofence invisibility; `/bookings/[id]/track` + `/status` |
+| — | Page auth guards + login pages | ✅ | _this commit_ | `pc_session` cookie, DAL guards on every `/office` + `/caregiver` page, `/office/login` + `/caregiver/login` |
 | 06 | Lead Capture & CRM (lead) | ⬜ | — | Depends on 02, 03 — **next** |
 | 07 | Caregiver PWA (offline-first) | ⬜ | — | Depends on 02, 03 |
 | 09 | API Layer | ⬜ | — | Route handlers consolidated; partly built alongside 03/04/08 |
 
 ## Next up
 
-**Now:** Module 06 — Lead Capture & CRM (lead archetype): `/enquiry/[service]` + `/office/leads` Kanban, overdue follow-ups, 30-day dormancy.
-**After 06:** 07 (Caregiver PWA), folding shared route handlers into 09 as they land. Then the deferred auth guards (below).
+**Now:** Module 06 — Lead Capture & CRM (lead archetype): `/enquiry/[service]` + `/office/leads` Kanban, overdue follow-ups, 30-day dormancy. The new `/office/leads` page must call `requireStaffPage()` like every other office page.
+**After 06:** 07 (Caregiver PWA), folding shared route handlers into 09 as they land.
+
+### Page auth guards — what's full vs. deferred
+
+Closed the gap where `/office/*` and `/caregiver/*` pages were viewable by anyone (the API was always gated).
+
+- **Full:** `pc_session` httpOnly cookie signed with a **distinct JWT audience** from access tokens, so neither token works in the other's seam (unit-tested both directions, and verified live); per-subject lifetime tracking the *refresh* token (staff 7d, caregiver 30d); a DAL (`lib/server/auth/dal.ts`) with `requireStaffPage`/`requireCaregiverPage` — cookie verify **plus** a DB check that the account is still active, so suspension revokes page access and not just tokens; `?next=` return paths validated by a shared rule (`lib/shared/return-path.ts`, unit-tested against open-redirect, cross-actor, and CRLF cases); `/office/login` + `/caregiver/login` in a new `(auth)` route group; sign-out that clears both halves of the session.
+- **Design note — why not the layouts:** the original plan said "a check in the `(office)`/`(caregiver)` layouts". Next 16 is explicit that layouts **do not re-render on client-side navigation** (Partial Rendering), so a layout-only check is not a guard. Every page calls the guard itself; the layouts also call it for their chrome, and React `cache` collapses the duplicate work to one verify + one row read per render.
+- **The caregiver rule holds (§10.1, Flow A):** the guard reads the 30-day cookie, never the 15-minute access token, so an expired access token can never surface a login screen. A caregiver sees `/caregiver/login` only after a full month away, or on suspension.
+- **Deferred:** the office forms still hold Bearer tokens in `localStorage` (XSS-readable) because `/api/v1/office/*` is Bearer-gated — see the follow-up below. Login itself needs Postgres, so it is typechecked and unit-tested here and exercised on the VPS.
+- **Coverage trade-off (deliberate):** the a11y suite no longer scans `/office/*` + `/caregiver` — guarded pages need a real session, and with no Postgres here they redirect. Leaving them listed would not have failed; axe would have scanned the login page seven times and reported the office routes green. Those scans move to the VPS. In their place `tests/auth-guard.spec.ts` asserts all 9 guarded routes redirect, the `?next=` round-trip, forged-cookie rejection, no login loop, and that `/book/*` stays public.
 
 ### Module 05 — what's full vs. deferred
 
@@ -39,8 +50,18 @@ Legend: ✅ complete · 🚧 in progress · ⬜ not started
 
 ## Deferred / follow-ups (tracked, not yet built)
 
-- [ ] **Page-level auth guards + login pages** (`/office/login`, `/caregiver/login`). The auth *engine* is built and all `/api/v1/office/*` endpoints are gated (`requireStaff` → 401), but the office/caregiver **pages** have no redirect guard and no login screen, so the URLs are viewable. Needs an httpOnly **session cookie** on login + a server-side check in the `(office)`/`(caregiver)` layouts (hybrid: cookies for page sessions, Bearer for APIs — §10.2 left this open). Customer `/book/*` is intentionally public (guest booking, Flow A). _Decision (user): do this after Module 05._
+- [x] **Page-level auth guards + login pages** — done (see above). Customer `/book/*` stays intentionally public (guest booking, Flow A).
+- [ ] **Get Bearer tokens out of the browser** (module 09). The office forms keep the access + refresh pair in `localStorage` (`lib/shared/client-tokens.ts`) because `/api/v1/office/*` authenticates with Bearer headers. Any XSS on the origin can read them; the page cookie is httpOnly and cannot. The real fix is to make office mutations **Server Actions authorised by the cookie**, leaving Bearer for genuine API clients — a module 09 refactor, since it changes every office handler's entry point.
+- [ ] **A missing `JWT_SECRET` silently signs everyone out.** `verifyPageSession`/`verifyAccessToken` catch *all* errors and return null, including the "JWT_SECRET must be set" throw — so a misconfigured deploy would redirect every user to login rather than failing loudly. Fail fast at boot instead (pre-existing in `tokens.ts`; the page session inherits it).
 
-## Environment caveat (applies to every module here)
+## Environment (updated — local Postgres now exists)
 
-No Postgres/Redis in the build environment, so DB/queue round-trips are typechecked and the **pure business logic is unit-tested**; live data paths run on the VPS. Each commit message states exactly what was verified vs. deferred.
+**Postgres 17 is installed locally** (service `postgresql-x64-17`, port 5432), with a dedicated `priyocare` role + database, migrations applied and the catalogue seeded. `.env.local` (gitignored) supplies `DATABASE_URL` + `JWT_SECRET`; `next` reads it automatically and the Node scripts load it via `process.loadEnvFile`. Setup steps are in the README.
+
+**This retires the "no Postgres in the build environment" caveat** that qualified every module above. Until now *nothing was ever persisted*: reads returned `[]` via `isDbConfigured()` (which is why the office panel showed empty states — no database, not an empty one) and every write path threw. The 21-table schema existed only as unapplied SQL.
+
+Verified against the live database once it existed: staff login (argon2id — wrong password 401, correct 200), the `pc_session` cookie (`HttpOnly`, `SameSite=lax`, `Max-Age=604800` = the intended 7-day staff window), all guarded pages rendering at 200 with a session, **deactivation revoking page access on the next request while the cookie is still valid** (the DB check earning its keep — Flow C), logout clearing the cookie, refresh-token rotation + revocation (revoked → 401 on `/auth/refresh`).
+
+Still not local: **Redis** (rate limits use the in-memory limiter — correct for one process, swap on the VPS), the SMS/OTP provider, the payment gateway, and private report storage (§19).
+
+Each commit message states exactly what was verified vs. deferred.
