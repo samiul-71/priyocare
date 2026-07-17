@@ -12,7 +12,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "tsx lib/server/db/seed.ts",
-    "db:create-staff": "tsx --conditions=react-server lib/server/db/create-staff.ts"
+    "db:create-staff": "tsx --conditions=react-server lib/server/db/create-staff.ts",
+    "db:seed-e2e": "tsx --conditions=react-server lib/server/db/seed-e2e.ts"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.0.2",

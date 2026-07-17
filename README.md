@@ -136,12 +136,15 @@ npm run db:seed     # seed zones/services/nursing variants (idempotent)
 npm run db:create-staff -- --email x@y.z --password '…' [--name N] [--role ops|admin]
                     # provision a staff login — the bootstrap path, since §10.1 forbids
                     # self-registration. Min 12 chars; they must change it at first sign-in.
+npm run db:seed-e2e # fixture for the caregiver a11y suite: an approved caregiver with a
+                    # settled PIN + today's job. Goes through the REAL onboarding chain,
+                    # so it cannot become a way around the §12.2 gate. Local/test only.
 ```
 
 ## Guardrails (blocking, same severity as typecheck)
 
 - **Module boundaries** (`eslint-plugin-boundaries`): `(customer)` may never import `components/office` or another group's code; `lib/server` is reachable only by the API. (PRD §4.2)
-- **Accessibility** (`@axe-core/playwright`): zero serious/critical violations on critical routes; contrast is contract, not preference. (PRD §17.9) The signed-in office pages are scanned by `tests/a11y-office.spec.ts`, which is opt-in — set `E2E_STAFF_EMAIL`/`E2E_STAFF_PASSWORD` to an existing account (it deliberately won't create one) or those specs skip.
+- **Accessibility** (`@axe-core/playwright`): zero serious/critical violations on critical routes; contrast is contract, not preference. (PRD §17.9) **Every surface is scanned**: anonymous routes in `a11y.spec.ts`, the signed-in office in `a11y-office.spec.ts`, the signed-in caregiver PWA in `a11y-caregiver.spec.ts`. The two authenticated suites are opt-in — set `E2E_STAFF_*` / `E2E_CAREGIVER_*` (after `npm run db:seed-e2e`) or they skip. The caregiver suite also asserts the **56px** tap target, since axe only checks WCAG's 24px and would pass a button less than half the size this product promises.
 - **Page guards** (`tests/auth-guard.spec.ts`): every `/office/*` and `/caregiver/*` route must redirect to its login screen when signed out. A page that forgets `requireStaffPage()` fails here. (PRD §10.2)
 - **Design tokens are closed**: the default Tailwind colour palette is cleared, so the failing brand teal can never be typed as text. (design.md §2)
 

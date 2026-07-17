@@ -25,10 +25,22 @@ Legend: ✅ complete · 🚧 in progress · ⬜ not started
 | — | Staff passwords: forced change, change, admin reset | ✅ | `352a7e9` | Closes the same gap for the accounts with the most access; `/office/staff` |
 | — | Boot-time env validation | ✅ | `023e266` | A missing `JWT_SECRET` fails at boot, naming it — instead of silently signing everyone out |
 | — | Reject a caregiver with a reason | ✅ | `4f71b97` | `rejected` was set by nothing; suspend was discarding its reason. Both recorded now, with reopen |
+| — | Caregiver a11y pass (+ `db:seed-e2e`) | ✅ | _pinned below_ | The last unscanned surface; fixture goes through the real onboarding gate |
 
 ## Next up
 
 **All nine modules are built**, and every credential in the system now has a forced first change and a working reset route. What remains is in the [TODO](#todo--everything-still-outstanding) — mostly waiting on an external provider (Redis, storage, SMS, email, the payment gateway's webhook shape), plus a handful of small independent code items and §10.7's pentest. Nothing there blocks anything else.
+
+### Caregiver a11y pass — what's full vs. deferred
+
+The last surface with no authenticated a11y scan — and the one with the strictest design contract: 56px targets, 18px base, one decision per screen, used by a tired woman on a cheap phone in bad light (design.md §6).
+
+- **Why it was last:** office pages render fine with no data, so that suite only needed a login. Caregiver pages need more — every one diverts to `/caregiver/change-pin` until her PIN is hers, and `/caregiver/today/{tasks,scan,care-log}` call `notFound()` without an assigned job. A login alone would have scanned the change-PIN screen four times and reported green.
+- **Full:** `npm run db:seed-e2e` builds the fixture **through the real onboarding chain** — application → 5 steps → payout → activate → issue PIN → change PIN — using the same mutations Ops uses, plus today's dispatched job with a ticklist. `tests/a11y-caregiver.spec.ts` scans all four screens signed in, and asserts it did not land on change-pin, login, or a 404 first — otherwise this suite could pass while testing nothing, which is the exact failure it exists to prevent. Opt-in via `E2E_CAREGIVER_PHONE`/`E2E_CAREGIVER_PIN`; unset → skips (verified both ways: 6 pass, 6 skip).
+- **The fixture exercises the gate rather than ducking it.** A script that `INSERT`ed an approved caregiver with a PIN was refused during module 07 for bypassing §7.4/§12.2; this one goes through the front door, so if the gate ever breaks the seeder stops working — which is a feature.
+- **Two checks axe cannot make:** the primary action is asserted at **≥56px**, because axe checks WCAG's 24px and would happily pass a button less than half the size this product promises; and the job card is asserted to show the **landmark**, because Dhaka navigates by landmarks, not addresses (§7.2).
+- **A real bug the fixture caught:** it first stored the phone as `01799887766` instead of `+8801799887766`, because it *cast* input to `createCaregiverApplication` rather than parsing it through `createCaregiverSchema` — the `as` type-checked and skipped the normalisation. Login normalises, so it never found her: 401. The seeder now parses, like every real caller does.
+- **Deferred:** `/caregiver/login`, `/caregiver/forgot-pin` and `/caregiver/change-pin` are covered by the anonymous suite; the change-PIN screen's *signed-in* state is not scanned (it needs a caregiver mid-onboarding, a third fixture state).
 
 ### Reject a caregiver with a reason — what's full vs. deferred
 
@@ -159,7 +171,7 @@ The single list of what is left. Each module's own "full vs. deferred" section a
 - [ ] **Staff forgot-password (self-service).** Needs an **email provider** — the one piece of the staff credential story still missing. A staff member who forgets their password today needs an admin to reset it (which works). Only bites if the sole admin forgets theirs: recovery is then `db:create-staff` on the VPS, which is a real answer but not a workflow.
 - [x] **A missing `JWT_SECRET` silently signs everyone out** — fixed (see below).
 - [x] **Reject a caregiver with a reason** — done (see below). It also caught suspension throwing its required reason away.
-- [ ] **`/caregiver` has no authenticated a11y pass.** The 8 office pages are scanned signed-in; the caregiver PWA is not, because it needs an approved caregiver row. Worth adding now that onboarding exists.
+- [x] **`/caregiver` has no authenticated a11y pass** — done (see below). Every surface in the product is now scanned.
 - [ ] **Two-device conflict beyond dedupe (§11).** `event_uuid` makes replay safe, but two devices ticking *different* task sets both "win" in turn — last write to `care_logs` stands. Needs an Ops rule, or a decision that it is not a real scenario.
 
 ### 3. Waiting on an external provider (§19)
