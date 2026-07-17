@@ -58,10 +58,19 @@ export async function signAccessToken(
   return jwt.sign(getSecret());
 }
 
-/** Verify an access token. Returns claims, or null if invalid/expired/tampered. */
+/**
+ * Verify an access token. Returns claims, or null if invalid/expired/tampered.
+ *
+ * `getSecret()` is called OUTSIDE the try — deliberately. A missing secret is a
+ * broken deployment, not a bad token, and swallowing it here is what made the
+ * failure silent: every request would answer "not authenticated", every login
+ * would fail, and nothing would say why. Let it throw; `instrumentation.ts`
+ * should have caught it at boot anyway.
+ */
 export async function verifyAccessToken(token: string): Promise<AccessClaims | null> {
+  const secret = getSecret();
   try {
-    const { payload } = await jwtVerify(token, getSecret(), {
+    const { payload } = await jwtVerify(token, secret, {
       issuer: ISSUER,
       audience: AUDIENCE,
     });

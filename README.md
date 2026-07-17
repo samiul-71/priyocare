@@ -57,6 +57,8 @@ Login screens live in the `(auth)` route group, deliberately **outside** the gua
 |---|---|---|
 | `DATABASE_URL` | Drizzle client, migrations, seed | Postgres connection string |
 | `JWT_SECRET` | access-token **and** page-session-cookie signing | ≥32 chars; rotate on suspected exposure / contractor offboarding. Rotating it invalidates both, signing everyone out — expected. |
+
+**The server refuses to start without these** (`instrumentation.ts` → `lib/server/env.ts`), naming every problem at once. It used to come up anyway and redirect every user to a login screen where every login also failed — a config mistake that read like an auth bug. `next build` is deliberately *not* gated: build and deploy environments are routinely different, and a build signs no tokens. `DATABASE_URL` is required in production only; locally the app is no-DB-safe by design.
 | `SMS_PROVIDER_CONFIGURED` | the OTP flows | Set to `1` in production only once a real `SmsSender` is wired (§19). Until then `/caregiver/forgot-pin` shows the hotline instead of a form that cannot deliver, and the console sender **throws** in production rather than pretending to send. |
 
 Locally these live in `.env.local`. `next dev|build` reads it automatically; the plain-Node scripts (`drizzle.config.ts`, `db:seed`, `db:create-staff`) call `process.loadEnvFile(".env.local")` themselves and fall back to real env vars on the VPS.

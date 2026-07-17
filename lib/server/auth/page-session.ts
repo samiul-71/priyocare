@@ -82,13 +82,21 @@ export async function signPageSession(
     .sign(getSecret());
 }
 
-/** Verify a page session. Returns claims, or null if invalid/expired/tampered. */
+/**
+ * Verify a page session. Returns claims, or null if invalid/expired/tampered.
+ *
+ * `getSecret()` sits outside the try for the same reason as in tokens.ts: a
+ * missing secret is a broken deployment, not a bad cookie. Caught here, it
+ * turned a config mistake into "everyone is signed out" with nothing in the
+ * logs — see lib/server/env.ts.
+ */
 export async function verifyPageSession(
   token: string | undefined,
 ): Promise<PageSessionClaims | null> {
   if (!token) return null;
+  const secret = getSecret();
   try {
-    const { payload } = await jwtVerify(token, getSecret(), {
+    const { payload } = await jwtVerify(token, secret, {
       issuer: ISSUER,
       audience: AUDIENCE,
     });

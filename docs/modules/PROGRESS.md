@@ -23,10 +23,21 @@ Legend: ✅ complete · 🚧 in progress · ⬜ not started
 | — | Force PIN change on first login | ✅ | `59e1cee` | Closes the admin-issued-PIN gap; revokes sessions predating the change |
 | — | PIN reset (Ops + self-service OTP) | ✅ | `56475f8` | `/caregiver/forgot-pin` + Ops reset; degrades honestly with no SMS provider |
 | — | Staff passwords: forced change, change, admin reset | ✅ | `352a7e9` | Closes the same gap for the accounts with the most access; `/office/staff` |
+| — | Boot-time env validation | ✅ | _pinned below_ | A missing `JWT_SECRET` fails at boot, naming it — instead of silently signing everyone out |
 
 ## Next up
 
 **All nine modules are built**, and every credential in the system now has a forced first change and a working reset route. What remains is in the [TODO](#todo--everything-still-outstanding) — mostly waiting on an external provider (Redis, storage, SMS, email, the payment gateway's webhook shape), plus a handful of small independent code items and §10.7's pentest. Nothing there blocks anything else.
+
+### Boot-time env validation — what's full vs. deferred
+
+A missing `JWT_SECRET` used to be **silent**. `getSecret()` throws, but both verifiers wrapped it in a `catch {}` that treats any failure as "invalid token" — so a misconfigured deploy came up, served pages, and redirected every user to a login screen where every login also failed. Nothing in the logs named the cause; it looked like an auth bug, at 3am, to whoever was on call.
+
+- **Full:** `instrumentation.ts` → `register()` runs once before the server accepts any request and calls `assertServerEnv()`; **both verifiers now call `getSecret()` outside the try**, so a config error propagates instead of masquerading as a bad token. Every problem is reported at once, naming the variable and (for a short secret) its actual length — finding a second missing variable after fixing the first is its own small misery. 6 unit tests.
+- **`DATABASE_URL` is production-only** on purpose: locally the app is deliberately no-DB-safe (reads return empty, pages render empty states), which is how every module was built before Postgres existed here.
+- **The build is deliberately NOT gated.** `register()` also runs during `next build` and in the edge runtime; neither signs a token, and failing a build for a *runtime* secret would be wrong — Docker images are routinely built without production secrets, and should be. Verified: `next build` with no `JWT_SECRET` still succeeds.
+- **Verified live:** with `.env.local` moved aside, `next start` logs `Refusing to start — the server environment is not configured:` naming **both** `JWT_SECRET` and `DATABASE_URL`, and every request 500s instead of silently redirecting to login. Next binds the port before preparing, so the process does not exit — a 500 on every request plus that log is the loud failure; a supervisor sees it either way.
+- **Not fixed by this:** a *wrong-but-valid* secret (≥32 chars, but not the one that signed existing sessions) still reads as "everyone signed out", because that is genuinely indistinguishable from a tampered token. Rotating the secret is expected to sign everyone out — that is documented in the README.
 
 ### Staff passwords — what's full vs. deferred
 
@@ -135,7 +146,7 @@ The single list of what is left. Each module's own "full vs. deferred" section a
 ### 2. Code gaps — buildable now, nothing blocking
 
 - [ ] **Staff forgot-password (self-service).** Needs an **email provider** — the one piece of the staff credential story still missing. A staff member who forgets their password today needs an admin to reset it (which works). Only bites if the sole admin forgets theirs: recovery is then `db:create-staff` on the VPS, which is a real answer but not a workflow.
-- [ ] **A missing `JWT_SECRET` silently signs everyone out.** `verifyPageSession`/`verifyAccessToken` catch *all* errors and return null, including the "JWT_SECRET must be set" throw — so a misconfigured deploy redirects every user to login instead of failing loudly. Fail fast at boot. (Same class as the SMS sender, which now throws — this one is still silent.)
+- [x] **A missing `JWT_SECRET` silently signs everyone out** — fixed (see below).
 - [ ] **Reject a caregiver with a reason.** `verification_status` has `rejected` and nothing sets it — a failed police check has no recorded outcome today.
 - [ ] **`/caregiver` has no authenticated a11y pass.** The 8 office pages are scanned signed-in; the caregiver PWA is not, because it needs an approved caregiver row. Worth adding now that onboarding exists.
 - [ ] **Two-device conflict beyond dedupe (§11).** `event_uuid` makes replay safe, but two devices ticking *different* task sets both "win" in turn — last write to `care_logs` stands. Needs an Ops rule, or a decision that it is not a real scenario.
