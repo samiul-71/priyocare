@@ -58,6 +58,24 @@ export function findEnvProblems(
     });
   }
 
+  // Email is optional and degrades honestly when off. But the moment its flag is
+  // ON, a half-configured sender is worse than none: the forgot-password screen
+  // shows a form that then drops mail. So EMAIL_PROVIDER_CONFIGURED=1 makes the
+  // SMTP credentials mandatory, checked at boot in every environment.
+  if (env.EMAIL_PROVIDER_CONFIGURED === "1") {
+    for (const v of ["SMTP_HOST", "SMTP_USER", "SMTP_PASS", "SMTP_FROM"] as const) {
+      if (!env[v]) {
+        problems.push({
+          variable: v,
+          problem: "missing — EMAIL_PROVIDER_CONFIGURED=1 promises a working SMTP sender",
+        });
+      }
+    }
+    if (env.SMTP_PORT && !/^\d+$/.test(env.SMTP_PORT)) {
+      problems.push({ variable: "SMTP_PORT", problem: `not a number ("${env.SMTP_PORT}")` });
+    }
+  }
+
   return problems;
 }
 

@@ -148,3 +148,16 @@ export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 export const refreshSchema = z.object({
   refreshToken: z.string().min(20).optional(),
 });
+
+/** Request a staff password-reset email (§10.1). */
+export const forgotPasswordSchema = z.object({
+  email: z.string().trim().toLowerCase().email("Enter a valid email address"),
+});
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
+
+/** Set a new password from the emailed link. The new password meets the full bar. */
+export const resetPasswordSchema = z.object({
+  token: z.string().min(1),
+  newPassword: newStaffPasswordSchema,
+});
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;

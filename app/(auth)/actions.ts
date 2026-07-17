@@ -3,13 +3,26 @@
 import { headers } from "next/headers";
 import { verifyStaffCredentials } from "@/lib/server/auth/credentials";
 import { getCaregiverActor, getStaffActor, setPageSessionCookie } from "@/lib/server/auth/dal";
-import { beginLoginAttempt, finishLoginAttempt } from "@/lib/server/auth/rate-limit";
+import {
+  beginLoginAttempt,
+  finishLoginAttempt,
+  rateLimiter,
+  RATE_LIMITS,
+} from "@/lib/server/auth/rate-limit";
 import { changeCaregiverPin } from "@/lib/server/caregiver/pin";
-import { changeStaffPassword } from "@/lib/server/auth/staff-password";
+import {
+  changeStaffPassword,
+  findStaffForReset,
+  resetStaffPasswordWithToken,
+} from "@/lib/server/auth/staff-password";
+import { signResetToken } from "@/lib/server/auth/password-reset";
+import { email as emailSender } from "@/lib/server/email/mailer";
 import { issueSession } from "@/lib/server/auth/sessions";
 import {
   changePasswordSchema,
   changePinSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
   staffLoginSchema,
 } from "@/lib/shared/auth-schemas";
 
@@ -119,6 +132,92 @@ export async function changeStaffPasswordAction(
     st: "staff",
     role: staff.role,
   });
+  return { ok: true };
+}
+
+/* --------------------------------------------- staff: forgot / reset password */
+
+/**
+ * Request a reset link (§10.1). ALWAYS returns the same success, whatever the
+ * email — unknown, deactivated, throttled, even a send failure. A form that said
+ * "no such account" (or failed differently for a real one) is a directory of who
+ * works here, and these accounts can read every patient's address. The honest
+ * "if that address is registered, check your inbox" belongs on the page, once.
+ */
+export async function requestStaffPasswordResetAction(input: unknown): Promise<{ ok: true }> {
+  const generic = { ok: true } as const;
+
+  const parsed = forgotPasswordSchema.safeParse(input);
+  if (!parsed.success) return generic;
+  const address = parsed.data.email;
+
+  const ip = (await headers()).get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const byEmail = await rateLimiter.check(
+    `pwreset:email:${address}`,
+    RATE_LIMITS.pwResetPerEmail.limit,
+    RATE_LIMITS.pwResetPerEmail.windowMs,
+  );
+  const byIp = await rateLimiter.check(
+    `pwreset:ip:${ip}`,
+    RATE_LIMITS.pwResetPerIp.limit,
+    RATE_LIMITS.pwResetPerIp.windowMs,
+  );
+  if (!byEmail.allowed || !byIp.allowed) return generic; // silently drop, never reveal throttling
+
+  const staff = await findStaffForReset(address);
+  if (!staff) return generic;
+
+  const token = await signResetToken({ staffId: staff.id, pca: staff.passwordChangedAt });
+  const h = await headers();
+  const host = h.get("host") ?? "localhost:3000";
+  const proto = h.get("x-forwarded-proto") ?? (process.env.NODE_ENV === "production" ? "https" : "http");
+  const link = `${proto}://${host}/office/reset-password?token=${encodeURIComponent(token)}`;
+
+  try {
+    await emailSender.send({
+      to: staff.email,
+      subject: "Reset your PriyoCare password",
+      text:
+        `Hello ${staff.name},\n\n` +
+        `Someone asked to reset the password for your PriyoCare office account. ` +
+        `Open this link to choose a new one — it expires in 30 minutes and can be used once:\n\n` +
+        `${link}\n\n` +
+        `If this wasn't you, ignore this email; your password stays the same.\n\n— PriyoCare`,
+    });
+  } catch (err) {
+    // Never surface a send failure to the form (it too would leak which
+    // addresses exist), but do log it — a silent mail outage is its own bug.
+    console.error("Password-reset email failed to send:", err instanceof Error ? err.message : err);
+  }
+
+  return generic;
+}
+
+export type ResetPasswordActionResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Set a new password from the emailed link. The token is the whole authority —
+ * signed, 30-minute, and single-use (it binds to `password_changed_at`, so
+ * success invalidates it and every other outstanding link). Every token failure
+ * returns one opaque message; only the password-rule messages are specific,
+ * because those help the legitimate user without telling an attacker anything.
+ */
+export async function resetStaffPasswordWithTokenAction(
+  input: unknown,
+): Promise<ResetPasswordActionResult> {
+  const parsed = resetPasswordSchema.safeParse(input);
+  if (!parsed.success) {
+    const pwIssue = parsed.error.issues.find((i) => i.path[0] === "newPassword");
+    return {
+      ok: false,
+      error: pwIssue?.message ?? "This reset link is invalid or has expired — request a new one.",
+    };
+  }
+
+  const result = await resetStaffPasswordWithToken(parsed.data.token, parsed.data.newPassword);
+  if (!result.ok) {
+    return { ok: false, error: "This reset link is invalid or has expired — request a new one." };
+  }
   return { ok: true };
 }
 

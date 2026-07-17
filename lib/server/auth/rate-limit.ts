@@ -87,6 +87,11 @@ export const RATE_LIMITS = {
    */
   loginPerIp: { limit: 50, windowMs: 5 * 60_000 },
   writePerAccount: { limit: 60, windowMs: 60_000 },
+  // Self-service password reset (§10.1). Capped by EVERY request, not just
+  // failures, because the abuse here is mailing a real person a stream of reset
+  // links, not guessing — so it uses `check`, not the login begin/finish pair.
+  pwResetPerEmail: { limit: 3, windowMs: 15 * 60_000 },
+  pwResetPerIp: { limit: 15, windowMs: 15 * 60_000 },
   // Public, unauthenticated enquiry form (§10.3). Loose enough for a family
   // enquiring about several services in one sitting, tight enough that a bot
   // cannot bury the Ops board.

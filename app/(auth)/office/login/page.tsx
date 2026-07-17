@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getStaffActor } from "@/lib/server/auth/dal";
 import { StaffLoginForm } from "@/components/auth/StaffLoginForm";
@@ -36,6 +37,11 @@ export default async function OfficeLoginPage({
       <h1 className="font-display text-xl font-bold text-navy">Office sign in</h1>
       <p className="mt-1 mb-5 text-sm text-text-muted">Staff accounts only.</p>
       <StaffLoginForm returnTo={returnTo} />
+      <p className="mt-4 text-sm">
+        <Link href="/office/forgot-password" className="text-teal-900 underline">
+          Forgot your password?
+        </Link>
+      </p>
     </>
   );
 }
