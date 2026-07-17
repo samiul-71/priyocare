@@ -43,6 +43,16 @@ function actorForPath(pathname: string): Actor | null {
 // Scoped CSP. `frame-ancestors 'none'` complements X-Frame-Options: DENY.
 // 'unsafe-inline' remains for now because Next's inline bootstrap is not yet
 // nonce-plumbed — tighten to nonces in a later hardening pass (§10.7).
+//
+// 'unsafe-eval' is DEV-ONLY and must stay that way. React's development build
+// calls eval() to rebuild server-side error stacks in the browser; without it
+// the dev overlay dies and takes the error it was reporting with it. A
+// production build never evals — Next's own CSP guide is explicit that the
+// widening is not needed there — and shipping it would hand any injected string
+// a way to become code, which is most of what a CSP is for. `NODE_ENV` is
+// inlined at build time, so the production bundle cannot carry this branch.
+const isDev = process.env.NODE_ENV === "development";
+
 const CSP = [
   "default-src 'self'",
   "base-uri 'self'",
@@ -52,7 +62,7 @@ const CSP = [
   "img-src 'self' data: blob:",
   "font-src 'self'",
   "style-src 'self' 'unsafe-inline'",
-  "script-src 'self' 'unsafe-inline'",
+  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
   "connect-src 'self'",
 ].join("; ");
 
