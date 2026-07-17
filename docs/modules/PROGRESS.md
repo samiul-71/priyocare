@@ -23,7 +23,7 @@ Legend: ✅ complete · 🚧 in progress · ⬜ not started
 | — | Force PIN change on first login | ✅ | `59e1cee` | Closes the admin-issued-PIN gap; revokes sessions predating the change |
 | — | PIN reset (Ops + self-service OTP) | ✅ | `56475f8` | `/caregiver/forgot-pin` + Ops reset; degrades honestly with no SMS provider |
 | — | Staff passwords: forced change, change, admin reset | ✅ | `352a7e9` | Closes the same gap for the accounts with the most access; `/office/staff` |
-| — | Boot-time env validation | ✅ | _pinned below_ | A missing `JWT_SECRET` fails at boot, naming it — instead of silently signing everyone out |
+| — | Boot-time env validation | ✅ | `023e266` | A missing `JWT_SECRET` fails at boot, naming it — instead of silently signing everyone out |
 
 ## Next up
 
