@@ -23,7 +23,7 @@ Legend: ✅ complete · 🚧 in progress · ⬜ not started
 | — | Force PIN change on first login | ✅ | `59e1cee` | Closes the admin-issued-PIN gap; revokes sessions predating the change |
 | — | PIN reset (Ops + self-service OTP) | ✅ | `56475f8` | `/caregiver/forgot-pin` + Ops reset; degrades honestly with no SMS provider |
 | — | Staff passwords: forced change, change, admin reset | ✅ | `352a7e9` | Closes the same gap for the accounts with the most access; `/office/staff` |
-| — | Boot-time env validation | ✅ | `023e266` | A missing `JWT_SECRET` fails at boot, naming it — instead of silently signing everyone out |
+| — | Boot-time env validation | ✅ | `023e266`, `39e3dd5` | A missing `JWT_SECRET` fails at boot, naming it — instead of silently signing everyone out. `39e3dd5` is the fix that made that true: `023e266` only threw, and Next catches a throwing `register()` and keeps serving 500s |
 | — | Reject a caregiver with a reason | ✅ | `4f71b97` | `rejected` was set by nothing; suspend was discarding its reason. Both recorded now, with reopen |
 | — | Caregiver a11y pass (+ `db:seed-e2e`) | ✅ | `6ed1509` | The last unscanned surface; fixture goes through the real onboarding gate |
 
