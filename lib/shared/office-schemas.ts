@@ -138,3 +138,58 @@ export const staffLeadServicesSchema = z.object({
   serviceIds: z.array(z.coerce.number().int().positive()).max(20),
 });
 export type StaffLeadServicesInput = z.infer<typeof staffLeadServicesSchema>;
+
+/**
+ * Create an office account from the panel (§10.1). The in-panel twin of
+ * `npm run db:create-staff` — the CLI stays, because it is the only way to make
+ * the FIRST admin on a fresh VPS, but day-to-day account creation should not
+ * require a shell on the server.
+ *
+ * NO PASSWORD FIELD ON PURPOSE. A handover password is generated server-side and
+ * shown once, exactly like an admin reset — an admin typing a colleague's first
+ * password is the "Welcome123 on a sticky note" failure the reset flow already
+ * avoids. `password_must_change` is set, so it dies at their first sign-in.
+ *
+ * Email is lowercased to match `staffLoginSchema` and the CLI, so a duplicate is
+ * caught on the same normalised value login will look up.
+ */
+export const createStaffSchema = z.object({
+  name: z.string().trim().min(1).max(120).optional(),
+  email: z.string().trim().toLowerCase().email("Enter a valid email address"),
+  role: z.enum(["ops", "admin"]).default("ops"),
+});
+export type CreateStaffInput = z.infer<typeof createStaffSchema>;
+
+/** Deactivate or reactivate an office account (§10.4 offboarding). */
+export const setStaffActiveSchema = z.object({
+  staffId: z.coerce.number().int().positive(),
+  isActive: z.boolean(),
+});
+export type SetStaffActiveInput = z.infer<typeof setStaffActiveSchema>;
+
+/**
+ * The customer-directory filters (admin only). Parsed straight from the URL
+ * search params, so every field is optional and coerced — a bookmarked or
+ * hand-edited query must degrade to "show everything", never throw. The same
+ * schema feeds the list page and the export route, so the spreadsheet is always
+ * the exact set the admin was looking at.
+ */
+export const customerFilterSchema = z.object({
+  /** Free text over name / phone / email. */
+  q: z.string().trim().max(100).optional().catch(undefined),
+  locale: z.enum(["bn", "en"]).optional().catch(undefined),
+  /** Registration date window, inclusive, as Dhaka calendar days (YYYY-MM-DD). */
+  from: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional()
+    .catch(undefined),
+  to: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional()
+    .catch(undefined),
+  hasBookings: z.enum(["yes", "no"]).optional().catch(undefined),
+  page: z.coerce.number().int().min(1).catch(1),
+});
+export type CustomerFilter = z.infer<typeof customerFilterSchema>;

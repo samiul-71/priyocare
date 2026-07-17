@@ -15,12 +15,13 @@ import {
   users,
 } from "../db/schema";
 import { revokeAllForSubject } from "../auth/sessions";
-import { generatePin, hashPin } from "../auth/password";
+import { generatePassword, generatePin, hashPassword, hashPin } from "../auth/password";
 import { formatBookingCode } from "../../shared/booking-code";
 import { ratingTriggersComplaint } from "../../shared/complaints";
 import { evaluateActivation, type ActivationResult } from "../../shared/onboarding";
 import type {
   CreateCaregiverInput,
+  CreateStaffInput,
   PhoneBookingInput,
   UpdateCaregiverInput,
 } from "../../shared/office-schemas";
@@ -493,4 +494,98 @@ export async function setStaffLeadServices(
 
     return { ok: true as const };
   });
+}
+
+export type CreateStaffResult =
+  | { ok: true; id: number; email: string; password: string }
+  | { ok: false; reason: "duplicate" };
+
+/**
+ * Create an office account from the panel (§10.1) — the in-panel twin of
+ * `db:create-staff`. The CLI stays for the bootstrap case (the first admin on a
+ * fresh VPS, before anyone can sign in); this is the everyday path.
+ *
+ * The temp password is GENERATED, not chosen, and returned once for the admin to
+ * hand over — same model as `resetStaffPassword`. `password_must_change` is set,
+ * so the admin's knowledge of it expires at the new colleague's first sign-in.
+ * `password_hash` is written but never selected back out; the plaintext lives
+ * only in the return value and is never stored or logged.
+ *
+ * Email is normalised to lowercase before the duplicate check so it collides on
+ * the exact value `staffLoginSchema` will later look up — `Ada@x.com` and
+ * `ada@x.com` are one account, not two.
+ */
+export async function createStaffAccount(input: CreateStaffInput): Promise<CreateStaffResult> {
+  const db = getDb();
+  const email = input.email.trim().toLowerCase();
+
+  const [existing] = await db
+    .select({ id: staffAccounts.id })
+    .from(staffAccounts)
+    .where(eq(staffAccounts.email, email))
+    .limit(1);
+  if (existing) return { ok: false, reason: "duplicate" };
+
+  const password = generatePassword();
+  const [created] = await db
+    .insert(staffAccounts)
+    .values({
+      name: input.name?.trim() || email.split("@")[0],
+      email,
+      passwordHash: await hashPassword(password),
+      role: input.role,
+      // A handover credential the admin necessarily knows — it dies at first
+      // sign-in, same rule as an Ops-issued PIN (§10.1).
+      passwordMustChange: true,
+      passwordChangedAt: new Date(),
+    })
+    .returning({ id: staffAccounts.id, email: staffAccounts.email });
+
+  return { ok: true, id: created.id, email: created.email, password };
+}
+
+export type SetStaffActiveResult =
+  | { ok: true; isActive: boolean }
+  | { ok: false; reason: "not_found" | "self" };
+
+/**
+ * Deactivate or reactivate an office account (§10.4 contractor offboarding).
+ *
+ * The table already SHOWED "Active/Deactivated" but nothing could change it —
+ * deactivation meant editing the database by hand. This closes that: a
+ * deactivated account is refused by the DAL on its very next request (page
+ * access) and has every refresh token revoked here (API access), so the two
+ * halves of a session end together rather than the Bearer path lingering.
+ *
+ * REFUSES SELF-DEACTIVATION. An admin switching off their own account would be
+ * the last thing that session ever did — locked out with no route back that
+ * does not involve `db:create-staff` on the VPS. It also quietly guarantees the
+ * panel never reaches zero admins: the acting admin is signed in (so active) and
+ * cannot remove themselves, so at least one active admin always remains.
+ *
+ * Reactivation does NOT restore old sessions — their refresh tokens are already
+ * gone and the cookie has long expired; the account signs in fresh.
+ */
+export async function setStaffActive(
+  staffId: number,
+  isActive: boolean,
+  actingAdminId: number,
+): Promise<SetStaffActiveResult> {
+  if (!isActive && staffId === actingAdminId) return { ok: false, reason: "self" };
+
+  const db = getDb();
+  const updated = await db
+    .update(staffAccounts)
+    .set({ isActive })
+    .where(eq(staffAccounts.id, staffId))
+    .returning({ id: staffAccounts.id });
+
+  if (updated.length === 0) return { ok: false, reason: "not_found" };
+
+  // Kill the Bearer half immediately; the page half dies via the DAL's active
+  // check on the next request. Only on deactivation — nothing to revoke when
+  // switching an account back on.
+  if (!isActive) await revokeAllForSubject("staff", staffId);
+
+  return { ok: true, isActive };
 }

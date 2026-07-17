@@ -4,6 +4,8 @@ import { requireStaffPage } from "@/lib/server/auth/dal";
 import { listLeadServices, listStaff, listStaffServices } from "@/lib/server/office/queries";
 import { StaffPasswordReset } from "@/components/office/StaffPasswordReset";
 import { StaffLeadServices } from "@/components/office/StaffLeadServices";
+import { StaffActiveToggle } from "@/components/office/StaffActiveToggle";
+import { StaffCreateForm } from "@/components/office/StaffCreateForm";
 
 export const metadata: Metadata = { title: "Staff" };
 export const dynamic = "force-dynamic";
@@ -46,10 +48,12 @@ export default async function StaffPage() {
     <div>
       <h1 className="font-display text-2xl font-bold text-navy">Staff</h1>
       <p className="mt-1 mb-5 max-w-2xl text-text-muted">
-        Everyone who can sign in to the office panel. Accounts are created with{" "}
-        <code className="rounded bg-surface-alt px-1 text-xs">npm run db:create-staff</code> — there
-        is no self-registration (§10.1).
+        Everyone who can sign in to the office panel. Add an account below, or use{" "}
+        <code className="rounded bg-surface-alt px-1 text-xs">npm run db:create-staff</code> on the
+        server for the first admin. There is no self-registration (§10.1).
       </p>
+
+      <StaffCreateForm />
 
       {nobodyOnRota && (
         <p
@@ -97,6 +101,11 @@ export default async function StaffPage() {
                       <span aria-hidden="true">{s.isActive ? "● " : "○ "}</span>
                       {s.isActive ? "Active" : "Deactivated"}
                     </span>
+                    {/* No self-toggle: an admin cannot switch off their own
+                        account (the action refuses it too). */}
+                    {s.id !== actor.staffId && (
+                      <StaffActiveToggle staffId={s.id} name={s.name} isActive={s.isActive} />
+                    )}
                   </td>
                   <td className="py-3 text-sm">
                     {s.mustChangePassword ? (

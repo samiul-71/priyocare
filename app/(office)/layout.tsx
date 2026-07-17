@@ -59,14 +59,22 @@ export default async function OfficeLayout({
           <p className="px-3 pb-1 text-xs text-white/60">
             {staff.name} · {staff.role}
           </p>
-          {/* Admin-only; the page enforces it regardless of this link. */}
+          {/* Admin-only; the pages enforce it regardless of these links. */}
           {staff.role === "admin" && (
-            <Link
-              href="/office/staff"
-              className="block rounded-md px-3 py-2 text-white/70 hover:bg-navy-800 hover:text-white"
-            >
-              Staff
-            </Link>
+            <>
+              <Link
+                href="/office/customers"
+                className="block rounded-md px-3 py-2 text-white/70 hover:bg-navy-800 hover:text-white"
+              >
+                Customers
+              </Link>
+              <Link
+                href="/office/staff"
+                className="block rounded-md px-3 py-2 text-white/70 hover:bg-navy-800 hover:text-white"
+              >
+                Staff
+              </Link>
+            </>
           )}
           <Link
             href="/office/change-password"

@@ -5,11 +5,13 @@ import { clearPageSessionCookie, getStaffActor } from "@/lib/server/auth/dal";
 import {
   createCaregiverApplication,
   createPhoneBooking,
+  createStaffAccount,
   DuplicateCaregiverError,
   assignCaregiver,
   issueCaregiverPin,
   rejectCaregiver,
   reopenCaregiverApplication,
+  setStaffActive,
   transitionVerificationStep,
   activateCaregiver,
   updateCaregiverFile,
@@ -24,9 +26,11 @@ import { resetCaregiverPin } from "@/lib/server/caregiver/pin";
 import { resetStaffPassword } from "@/lib/server/auth/staff-password";
 import {
   createCaregiverSchema,
+  createStaffSchema,
   dispatchSchema,
   phoneBookingSchema,
   rejectCaregiverSchema,
+  setStaffActiveSchema,
   staffLeadServicesSchema,
   updateCaregiverSchema,
   verifyStepSchema,
@@ -333,6 +337,71 @@ export async function resetStaffPasswordAction(
         : result.reason === "inactive"
           ? "That account is deactivated — reactivate it before resetting a password."
           : "Staff account not found.",
+  };
+}
+
+/**
+ * Create an office account (§10.1). ADMIN ONLY — checked here; account creation
+ * is who-can-see-every-patient's-address, the same privilege the role gate on
+ * reset and the lead rota protects.
+ *
+ * Returns the generated handover password ONCE, for the admin to read to the new
+ * colleague. It is `must_change`, so their knowledge of it expires at that
+ * colleague's first sign-in.
+ */
+export async function createStaffAction(
+  input: unknown,
+): Promise<ActionResult<{ email: string; password: string }>> {
+  const actor = await getStaffActor();
+  if (!actor) return SESSION_EXPIRED;
+  if (actor.role !== "admin") {
+    return { ok: false, error: "Only an admin can create office accounts." };
+  }
+
+  const parsed = createStaffSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: "Check the highlighted fields.", fields: fieldErrors(parsed.error.issues) };
+  }
+
+  const result = await createStaffAccount(parsed.data);
+  if (!result.ok) {
+    return { ok: false, error: "An account with that email already exists.", fields: { email: ["Already in use."] } };
+  }
+
+  revalidatePath("/office/staff");
+  return { ok: true, data: { email: result.email, password: result.password } };
+}
+
+/**
+ * Deactivate or reactivate an office account (§10.4). ADMIN ONLY, checked here
+ * AND in `setStaffActive` (self-deactivation refused there). The page hides the
+ * control from `ops`; this refuses them regardless — a UI hide is never the gate.
+ */
+export async function setStaffActiveAction(
+  staffId: number,
+  isActive: boolean,
+): Promise<ActionResult> {
+  const actor = await getStaffActor();
+  if (!actor) return SESSION_EXPIRED;
+  if (actor.role !== "admin") {
+    return { ok: false, error: "Only an admin can deactivate or reactivate accounts." };
+  }
+
+  const parsed = setStaffActiveSchema.safeParse({ staffId, isActive });
+  if (!parsed.success) return { ok: false, error: "That is not a valid request." };
+
+  const result = await setStaffActive(parsed.data.staffId, parsed.data.isActive, actor.staffId);
+  if (result.ok) {
+    revalidatePath("/office/staff");
+    return { ok: true };
+  }
+
+  return {
+    ok: false,
+    error:
+      result.reason === "self"
+        ? "You cannot deactivate your own account — ask another admin."
+        : "Staff account not found.",
   };
 }
 
