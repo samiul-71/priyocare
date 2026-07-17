@@ -24,10 +24,21 @@ Legend: ✅ complete · 🚧 in progress · ⬜ not started
 | — | PIN reset (Ops + self-service OTP) | ✅ | `56475f8` | `/caregiver/forgot-pin` + Ops reset; degrades honestly with no SMS provider |
 | — | Staff passwords: forced change, change, admin reset | ✅ | `352a7e9` | Closes the same gap for the accounts with the most access; `/office/staff` |
 | — | Boot-time env validation | ✅ | `023e266` | A missing `JWT_SECRET` fails at boot, naming it — instead of silently signing everyone out |
+| — | Reject a caregiver with a reason | ✅ | _pinned below_ | `rejected` was set by nothing; suspend was discarding its reason. Both recorded now, with reopen |
 
 ## Next up
 
 **All nine modules are built**, and every credential in the system now has a forced first change and a working reset route. What remains is in the [TODO](#todo--everything-still-outstanding) — mostly waiting on an external provider (Redis, storage, SMS, email, the payment gateway's webhook shape), plus a handful of small independent code items and §10.7's pentest. Nothing there blocks anything else.
+
+### Reject a caregiver with a reason — what's full vs. deferred
+
+`rejected` existed in the `verification_status` enum and **nothing set it**. A failed police check had no recorded outcome: the application just sat at `pending` forever, indistinguishable from one nobody had got to yet. Building it surfaced the mirror bug — **suspension demanded a reason, parsed it, and threw it away**, so a caregiver's work could end and nothing anywhere said why. That is her livelihood; Ops has to be able to answer for it.
+
+- **Full:** `status_reason` + `status_changed_by` + `status_changed_at` (migration 0005) — who, when, why; `POST /office/caregivers/{id}/reject` (reason required) and a reject/reopen UI on the verify page; the reason surfaces on the board so Ops never opens a file to learn why. **Suspend now records the reason it was already collecting.** The actor is always the staff id from the verified token, never caller-supplied. 8 unit tests.
+- **Reject refuses an approved caregiver (409).** Rejection is a verdict on an *application*; pulling a working caregiver is `suspend`, which is Flow C and exists for exactly that. Blurring them would lose the difference between "we never took her on" and "we took her on and something went wrong" — very different facts about a person.
+- **Reopen exists because rejection would otherwise be a trap.** `caregivers.phone` is unique, so a rejected woman who returns with a valid clearance **cannot re-apply** — intake 409s on her number (verified). Without reopen, a rejection made in error locks a real person out permanently, with no route back that does not involve editing the database. The reason is deliberately **kept** on reopen: why she was once rejected is exactly what the next reviewer needs.
+- **Verified live:** blank/whitespace reason → 422; with a reason → 200 and `reason` + `by: Dev Ops` + timestamp on the row; re-apply on the same phone → 409; reopen → `pending` with the reason still on file; rejecting an approved caregiver → 409; suspend → 200 **with the reason now stored** (and an unknown `seriousTag` → 422, which is the tag list doing its job).
+- **Deferred:** this stores the **current** status's reason, not a history. If Ops needs the full trail (suspended → reinstated → suspended again) that is a status-events table, not more columns — worth doing only if they ask.
 
 ### Boot-time env validation — what's full vs. deferred
 
@@ -147,7 +158,7 @@ The single list of what is left. Each module's own "full vs. deferred" section a
 
 - [ ] **Staff forgot-password (self-service).** Needs an **email provider** — the one piece of the staff credential story still missing. A staff member who forgets their password today needs an admin to reset it (which works). Only bites if the sole admin forgets theirs: recovery is then `db:create-staff` on the VPS, which is a real answer but not a workflow.
 - [x] **A missing `JWT_SECRET` silently signs everyone out** — fixed (see below).
-- [ ] **Reject a caregiver with a reason.** `verification_status` has `rejected` and nothing sets it — a failed police check has no recorded outcome today.
+- [x] **Reject a caregiver with a reason** — done (see below). It also caught suspension throwing its required reason away.
 - [ ] **`/caregiver` has no authenticated a11y pass.** The 8 office pages are scanned signed-in; the caregiver PWA is not, because it needs an approved caregiver row. Worth adding now that onboarding exists.
 - [ ] **Two-device conflict beyond dedupe (§11).** `event_uuid` makes replay safe, but two devices ticking *different* task sets both "win" in turn — last write to `care_logs` stands. Needs an Ops rule, or a decision that it is not a real scenario.
 

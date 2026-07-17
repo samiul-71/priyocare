@@ -83,6 +83,12 @@ export default async function CaregiversPage() {
                   </td>
                   <td className="py-3">
                     <StatusTag row={cg} />
+                    {/* Never make Ops open the file to learn why. */}
+                    {cg.statusReason && (
+                      <span className="mt-1 block max-w-xs text-xs text-text-muted">
+                        {cg.statusReason}
+                      </span>
+                    )}
                   </td>
                   <td className="py-3 text-right">
                     <Link

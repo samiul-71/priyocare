@@ -28,6 +28,8 @@ Trusted home healthcare in Dhaka — **one Next.js application, one repository, 
 
 - **Staff passwords: forced change, self-service change, admin reset** ✅ staff had **none** of what a caregiver has — set once by `db:create-staff`, never changed. Now: `password_must_change` diverts every office page to `/office/change-password` until the admin-set password is replaced; a self-service change; an **admin-only** reset of a colleague's forgotten password; and `/office/staff`, since an admin panel that can't answer "who can read every patient's address?" is missing something basic. 12 chars, **no composition rules** (NIST — length defends a hash; "one uppercase, one symbol" produces `Password1!` and a sticky note), plus a short list of what everyone tries first. *(13 unit tests. Verified live: an `ops` user resetting an admin → **403**; self-reset → 409; after a change the old session 307s to login and the old password 401s; `/office/staff` sends `ops` to `/office`, not login.)*
 
+- **Reject a caregiver with a reason** ✅ `rejected` existed in the enum and **nothing set it** — a failed police check left the application at `pending` forever. Now `POST /office/caregivers/{id}/reject` records the reason with who and when, refuses an already-approved caregiver (that is `suspend`'s job), and can be reopened — without that, rejection is a trap, since the phone number is unique and she could never re-apply. It also caught the mirror bug: **suspend demanded a reason, parsed it, and threw it away.** *(8 unit tests; verified live end to end.)*
+
 See [`docs/modules/PROGRESS.md`](docs/modules/PROGRESS.md) for the ordered status of every module. Everything else is specced in `docs/modules/` and built on top of these.
 
 ### Auth architecture (module 03)

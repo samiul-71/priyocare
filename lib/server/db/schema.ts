@@ -279,6 +279,21 @@ export const caregivers = pgTable(
     verificationStatus: verificationStatus("verification_status")
       .notNull()
       .default("pending"),
+    /**
+     * Why this caregiver is in her current status — set when she is rejected or
+     * suspended (§12.2). Both of those end someone's work, and until now
+     * neither recorded a reason: `rejected` was set by nothing at all, and the
+     * suspend endpoint demanded a reason and threw it away.
+     *
+     * The CURRENT status's reason, not a history. If Ops ever needs the full
+     * trail (suspended → reinstated → suspended again) that is a status-events
+     * table, not more columns here.
+     */
+    statusReason: text("status_reason"),
+    statusChangedBy: bigint("status_changed_by", { mode: "number" }).references(
+      () => staffAccounts.id,
+    ),
+    statusChangedAt: timestamp("status_changed_at", { withTimezone: true }),
     pinHash: text("pin_hash"), // set at activation; null before approval (§12.2)
     /**
      * True while the PIN is the one OPS issued. Ops necessarily knows it — they

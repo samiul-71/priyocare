@@ -153,6 +153,8 @@ export interface CaregiverRow {
   stepsDone: number;
   stepsRequired: number;
   canActivate: boolean;
+  /** Why she is rejected/suspended — null otherwise. Ops must never guess. */
+  statusReason: string | null;
 }
 
 /**
@@ -175,6 +177,7 @@ export async function listCaregivers(): Promise<CaregiverRow[]> {
       hasPin: sql<boolean>`${caregivers.pinHash} is not null`,
       bnmcRegNo: caregivers.bnmcRegNo,
       bkashPayoutNumber: caregivers.bkashPayoutNumber,
+      statusReason: caregivers.statusReason,
     })
     .from(caregivers)
     .orderBy(desc(caregivers.createdAt));
@@ -207,6 +210,7 @@ export async function listCaregivers(): Promise<CaregiverRow[]> {
       stepsDone: done.length,
       stepsRequired: requiredStepsFor(cg.skill).length,
       canActivate: activation.canActivate,
+      statusReason: cg.statusReason,
     };
   });
 }
@@ -235,6 +239,7 @@ export async function getCaregiverDetail(caregiverId: number): Promise<Caregiver
       hasPin: sql<boolean>`${caregivers.pinHash} is not null`,
       bnmcRegNo: caregivers.bnmcRegNo,
       bkashPayoutNumber: caregivers.bkashPayoutNumber,
+      statusReason: caregivers.statusReason,
     })
     .from(caregivers)
     .where(eq(caregivers.id, caregiverId))

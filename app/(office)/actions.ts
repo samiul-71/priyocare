@@ -8,6 +8,8 @@ import {
   DuplicateCaregiverError,
   assignCaregiver,
   issueCaregiverPin,
+  rejectCaregiver,
+  reopenCaregiverApplication,
   transitionVerificationStep,
   activateCaregiver,
   updateCaregiverFile,
@@ -23,6 +25,7 @@ import {
   createCaregiverSchema,
   dispatchSchema,
   phoneBookingSchema,
+  rejectCaregiverSchema,
   updateCaregiverSchema,
   verifyStepSchema,
 } from "@/lib/shared/office-schemas";
@@ -240,6 +243,55 @@ export async function resetPinAction(caregiverId: number): Promise<ActionResult<
   revalidatePath(`/office/caregivers/${caregiverId}/verify`);
   revalidatePath("/office/caregivers");
   return { ok: true, data: { pin: result.pin } };
+}
+
+/**
+ * Reject an application, with a reason that is actually recorded (§12.2).
+ * Refuses an approved caregiver — that is what suspend is for.
+ */
+export async function rejectCaregiverAction(
+  caregiverId: number,
+  input: unknown,
+): Promise<ActionResult> {
+  const staff = await getStaffActor();
+  if (!staff) return SESSION_EXPIRED;
+
+  const parsed = rejectCaregiverSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "A reason is required." };
+  }
+
+  const result = await rejectCaregiver(caregiverId, parsed.data.reason, staff.staffId);
+  if (!result.ok) {
+    return {
+      ok: false,
+      error:
+        result.reason === "already_approved"
+          ? "She is already approved — suspend her instead of rejecting the application."
+          : "Caregiver not found.",
+    };
+  }
+
+  revalidatePath(`/office/caregivers/${caregiverId}/verify`);
+  revalidatePath("/office/caregivers");
+  return { ok: true };
+}
+
+/**
+ * Reopen a rejected application. Without this, rejection is a trap: the phone
+ * number is unique, so a woman who comes back with a valid clearance cannot
+ * re-apply, and a rejection made in error locks a real person out permanently.
+ */
+export async function reopenCaregiverAction(caregiverId: number): Promise<ActionResult> {
+  const staff = await getStaffActor();
+  if (!staff) return SESSION_EXPIRED;
+
+  const reopened = await reopenCaregiverApplication(caregiverId, staff.staffId);
+  if (!reopened) return { ok: false, error: "That application is not rejected." };
+
+  revalidatePath(`/office/caregivers/${caregiverId}/verify`);
+  revalidatePath("/office/caregivers");
+  return { ok: true };
 }
 
 /* ------------------------------------------------------------------ staff */

@@ -36,6 +36,13 @@
       "when": 1784237729004,
       "tag": "0004_lucky_terrax",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1784264102795,
+      "tag": "0005_nosy_human_fly",
+      "breakpoints": true
     }
   ]
 }

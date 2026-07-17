@@ -322,13 +322,104 @@ export async function activateCaregiver(caregiverId: number): Promise<Activation
 /**
  * Suspend a caregiver from all dispatch and immediately revoke every active
  * refresh token (PRD §9, §10.1) — not just dispatch eligibility.
+ *
+ * The reason is now RECORDED. It used to be required by `suspendSchema`,
+ * parsed by the handler, and then dropped on the floor — so a caregiver's work
+ * could end and nothing anywhere said why. That is not a small thing: it is her
+ * livelihood, and Ops needed to be able to answer for it.
  */
-export async function suspendCaregiver(caregiverId: number) {
+export async function suspendCaregiver(
+  caregiverId: number,
+  reason: string,
+  staffId: number,
+  now: Date = new Date(),
+) {
   await getDb()
     .update(caregivers)
-    .set({ verificationStatus: "suspended" })
+    .set({
+      verificationStatus: "suspended",
+      statusReason: reason,
+      statusChangedBy: staffId,
+      statusChangedAt: now,
+    })
     .where(eq(caregivers.id, caregiverId));
   await revokeAllForSubject("caregiver", caregiverId);
+}
+
+export type RejectResult =
+  | { ok: true }
+  | { ok: false; reason: "not_found" | "already_approved" };
+
+/**
+ * Reject an application (§12.2). The `rejected` status existed in the enum and
+ * **nothing set it** — a failed police check had no recorded outcome at all,
+ * so the application simply sat at `pending` forever, indistinguishable from
+ * one nobody had got to yet.
+ *
+ * REFUSES AN APPROVED CAREGIVER. Rejection is a verdict on an application;
+ * pulling a working caregiver is `suspendCaregiver`, which is Flow C and exists
+ * precisely for that. Blurring the two would lose the distinction between "we
+ * never took her on" and "we took her on and something went wrong" — which are
+ * very different facts about a person.
+ *
+ * Tokens are revoked anyway: she should not have any (no PIN before approval),
+ * and if she somehow does, a rejection should end them.
+ */
+export async function rejectCaregiver(
+  caregiverId: number,
+  reason: string,
+  staffId: number,
+  now: Date = new Date(),
+): Promise<RejectResult> {
+  const db = getDb();
+
+  const [cg] = await db
+    .select({ id: caregivers.id, verificationStatus: caregivers.verificationStatus })
+    .from(caregivers)
+    .where(eq(caregivers.id, caregiverId))
+    .limit(1);
+
+  if (!cg) return { ok: false, reason: "not_found" };
+  if (cg.verificationStatus === "approved") return { ok: false, reason: "already_approved" };
+
+  await db
+    .update(caregivers)
+    .set({
+      verificationStatus: "rejected",
+      statusReason: reason,
+      statusChangedBy: staffId,
+      statusChangedAt: now,
+    })
+    .where(eq(caregivers.id, caregiverId));
+  await revokeAllForSubject("caregiver", caregiverId);
+
+  return { ok: true };
+}
+
+/**
+ * Reopen a rejected application, back to `pending`.
+ *
+ * This exists because rejection would otherwise be a trap: `caregivers.phone`
+ * is unique, so a rejected woman who comes back with a valid police clearance
+ * cannot re-apply — intake would 409 on her number — and a rejection made in
+ * error would permanently lock a real person out of working here, with no route
+ * back that does not involve someone editing the database.
+ *
+ * The reason is deliberately KEPT, not cleared: why she was once rejected is
+ * exactly the thing the next reviewer needs to see.
+ */
+export async function reopenCaregiverApplication(
+  caregiverId: number,
+  staffId: number,
+  now: Date = new Date(),
+): Promise<boolean> {
+  const updated = await getDb()
+    .update(caregivers)
+    .set({ verificationStatus: "pending", statusChangedBy: staffId, statusChangedAt: now })
+    .where(and(eq(caregivers.id, caregiverId), eq(caregivers.verificationStatus, "rejected")))
+    .returning({ id: caregivers.id });
+
+  return updated.length > 0;
 }
 
 /** Auto-create a complaint for a 1–2★ rating (PRD §9, AC 1.1). No-op for 3★+. */

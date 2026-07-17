@@ -50,6 +50,21 @@ export const suspendSchema = z.object({
   seriousTag: z.enum(SERIOUS_TAGS).optional(),
 });
 
+/**
+ * Reject an application (§12.2). The reason is REQUIRED and recorded — this
+ * ends someone's chance of work, and "why?" must have an answer six months
+ * later when she asks, or when Ops is asked to justify the pattern.
+ *
+ * Distinct from suspend: reject is for an application that never passed
+ * verification (the police check came back bad, the references did not check
+ * out). A caregiver who is already working gets suspended, which is Flow C and
+ * revokes her tokens.
+ */
+export const rejectCaregiverSchema = z.object({
+  reason: z.string().trim().min(1, "A reason is required to reject an application").max(500),
+});
+export type RejectCaregiverInput = z.infer<typeof rejectCaregiverSchema>;
+
 export const caregiverSkillSchema = z.enum([
   "phlebotomist",
   "attendant",

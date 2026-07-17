@@ -5,6 +5,7 @@ import { requireStaffPage } from "@/lib/server/auth/dal";
 import { getCaregiverDetail } from "@/lib/server/office/queries";
 import { VerificationChecklist } from "@/components/office/VerificationChecklist";
 import { PayoutNumberForm } from "@/components/office/PayoutNumberForm";
+import { RejectCaregiver } from "@/components/office/RejectCaregiver";
 
 export const metadata: Metadata = { title: "Verify caregiver" };
 export const dynamic = "force-dynamic";
@@ -42,11 +43,26 @@ export default async function VerifyCaregiverPage({
       </p>
 
       {cg.verificationStatus === "suspended" && (
-        <p role="status" className="mb-5 max-w-xl rounded-md border border-danger bg-surface-alt p-3 text-sm text-danger">
-          <span aria-hidden="true">⊘ </span>
-          Suspended. Their tokens were revoked at suspension; they cannot be dispatched.
-        </p>
+        <div role="status" className="mb-5 max-w-xl rounded-md border border-danger bg-surface-alt p-3 text-sm">
+          <p className="text-danger">
+            <span aria-hidden="true">⊘ </span>
+            Suspended. Their tokens were revoked at suspension; they cannot be dispatched.
+          </p>
+          {cg.statusReason && (
+            <p className="mt-1 text-text-muted">
+              Reason: <span className="text-navy">{cg.statusReason}</span>
+            </p>
+          )}
+        </div>
       )}
+
+      <section className="mb-6" aria-label="Application decision">
+        <RejectCaregiver
+          caregiverId={cg.id}
+          status={cg.verificationStatus}
+          statusReason={cg.statusReason}
+        />
+      </section>
 
       <section className="mb-6 max-w-xl" aria-label="Payout">
         <h2 className="mb-2 text-sm font-semibold text-navy">bKash payout number</h2>
