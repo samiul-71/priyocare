@@ -149,6 +149,7 @@ npm run db:seed-e2e # fixture for the caregiver a11y suite: an approved caregive
 - **Accessibility** (`@axe-core/playwright`): zero serious/critical violations on critical routes; contrast is contract, not preference. (PRD §17.9) **Every surface is scanned**: anonymous routes in `a11y.spec.ts`, the signed-in office in `a11y-office.spec.ts`, the signed-in caregiver PWA in `a11y-caregiver.spec.ts`. The two authenticated suites are opt-in — set `E2E_STAFF_*` / `E2E_CAREGIVER_*` (after `npm run db:seed-e2e`) or they skip. The caregiver suite also asserts the **56px** tap target, since axe only checks WCAG's 24px and would pass a button less than half the size this product promises.
 - **Page guards** (`tests/auth-guard.spec.ts`): every `/office/*` and `/caregiver/*` route must redirect to its login screen when signed out. A page that forgets `requireStaffPage()` fails here. (PRD §10.2)
 - **Design tokens are closed**: the default Tailwind colour palette is cleared, so the failing brand teal can never be typed as text. (design.md §2)
+- **Boot config** (`tests/env-boot.test.ts`): a server with no `JWT_SECRET` must exit, not come up and 500. Throwing out of `register()` is *not* enough — Next catches it and keeps listening. The `next start` case needs a production build and skips without one, so run `npm run build` before trusting a green run.
 
 ## Ground rules
 

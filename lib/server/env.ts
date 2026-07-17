@@ -74,3 +74,26 @@ export function assertServerEnv(
       `Set these on the VPS (never commit them). Locally they live in .env.local; see the README.`,
   );
 }
+
+/**
+ * The boot policy: a broken environment must not become a running server.
+ *
+ * `assertServerEnv` only throws, and THROWING IS NOT ENOUGH — Next catches it,
+ * logs an unhandledRejection, and keeps listening, so every route 500s while the
+ * process stays up. That is quieter than it sounds: a supervisor sees a live
+ * process, so no crash loop and no restart, and a rolling deploy calls the new
+ * instance healthy and retires the last good one. Measured, not assumed.
+ *
+ * Lives here rather than in `instrumentation.ts` because that file is compiled
+ * for the edge runtime too, where `process.exit` does not exist — Turbopack
+ * rightly warns about it. This module is `server-only` and is imported
+ * dynamically, after the runtime check.
+ */
+export function assertServerEnvOrExit(): void {
+  try {
+    assertServerEnv();
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  }
+}

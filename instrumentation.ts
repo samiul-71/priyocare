@@ -13,6 +13,10 @@ export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
   if (process.env.NEXT_PHASE === "phase-production-build") return;
 
-  const { assertServerEnv } = await import("./lib/server/env");
-  assertServerEnv();
+  // Exits rather than throws. Throwing out of `register()` does NOT stop the
+  // server — the Next 16 docs never promised it would, and it does not: Next
+  // catches it, logs an unhandledRejection, and keeps listening while every
+  // route 500s. `tests/env-boot.test.ts` is what holds this down.
+  const { assertServerEnvOrExit } = await import("./lib/server/env");
+  assertServerEnvOrExit();
 }
