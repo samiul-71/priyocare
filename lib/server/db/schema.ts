@@ -232,6 +232,40 @@ export const staffAccounts = pgTable("staff_accounts", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/**
+ * Which lead services a staff member handles — the pool a new lead rotates
+ * through (§9, Flow C's "+ owner").
+ *
+ * BY SERVICE, NOT BY ZONE. Zones are hyper-local delivery areas (Mirpur,
+ * Gulshan…) that exist to send a caregiver to a house. No lead involves a
+ * house: the three lead-archetype services are health insurance (phone and
+ * paperwork), medical tourism (the patient flies abroad — the lead carries a
+ * `destination_pref`) and mental-health counselling (off-platform). A lead has
+ * no zone and the enquiry form deliberately never asks for one; asking a
+ * worried family for their area before anyone has spoken to them costs a
+ * conversion for a field that would be noise. The service IS the specialism —
+ * selling insurance, counselling a family in crisis and coordinating a hospital
+ * transfer abroad are different jobs.
+ *
+ * Empty by design: with nobody mapped, every lead falls back to Unassigned,
+ * which is exactly the behaviour that existed before this table.
+ */
+export const staffServices = pgTable(
+  "staff_services",
+  {
+    staffId: bigint("staff_id", { mode: "number" })
+      .notNull()
+      .references(() => staffAccounts.id, { onDelete: "cascade" }),
+    serviceId: bigint("service_id", { mode: "number" })
+      .notNull()
+      .references(() => services.id, { onDelete: "cascade" }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.staffId, t.serviceId] }),
+    index("idx_staff_services_service").on(t.serviceId),
+  ],
+);
+
 export const refreshTokens = pgTable(
   "refresh_tokens",
   {

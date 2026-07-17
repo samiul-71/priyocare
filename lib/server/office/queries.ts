@@ -10,6 +10,7 @@ import {
   patientProfiles,
   services,
   staffAccounts,
+  staffServices,
   zones,
 } from "../db/schema";
 import {
@@ -310,4 +311,36 @@ export async function listStaff(): Promise<StaffRow[]> {
     })
     .from(staffAccounts)
     .orderBy(desc(staffAccounts.createdAt));
+}
+
+export interface LeadServiceRow {
+  id: number;
+  nameEn: string;
+  isActive: boolean;
+}
+
+/**
+ * The lead-archetype services — the only ones a staff member can be put on a
+ * rota for (§9). Visit and placement services dispatch a caregiver to a house
+ * and have nothing to do with lead ownership.
+ *
+ * Inactive ones are included: a service can be switched off in the catalogue
+ * while staff are still mapped to it, and silently hiding that mapping would
+ * make the rota look emptier than it is.
+ */
+export async function listLeadServices(): Promise<LeadServiceRow[]> {
+  if (!isDbConfigured()) return [];
+  return getDb()
+    .select({ id: services.id, nameEn: services.nameEn, isActive: services.isActive })
+    .from(services)
+    .where(eq(services.archetype, "lead"))
+    .orderBy(services.sortOrder);
+}
+
+/** Every staff↔lead-service pairing, for the rota grid on /office/staff. */
+export async function listStaffServices(): Promise<{ staffId: number; serviceId: number }[]> {
+  if (!isDbConfigured()) return [];
+  return getDb()
+    .select({ staffId: staffServices.staffId, serviceId: staffServices.serviceId })
+    .from(staffServices);
 }

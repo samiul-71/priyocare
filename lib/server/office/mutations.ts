@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, count, eq, gte } from "drizzle-orm";
+import { and, count, eq, gte, inArray } from "drizzle-orm";
 import { getDb } from "../db";
 import {
   bookings,
@@ -9,6 +9,9 @@ import {
   complaints,
   patientProfiles,
   payments,
+  services,
+  staffAccounts,
+  staffServices,
   users,
 } from "../db/schema";
 import { revokeAllForSubject } from "../auth/sessions";
@@ -440,4 +443,54 @@ export async function autoCreateComplaint(
     })
     .returning();
   return complaint;
+}
+
+/**
+ * Put a staff member on the rota for a set of lead services (§9). Replace-all:
+ * the list given is the list they end up with.
+ *
+ * ONLY LEAD-ARCHETYPE SERVICES. Mapping someone to nursing would be
+ * meaningless — nursing dispatches a caregiver to a house and never becomes a
+ * lead — and a meaningless row here is worse than a rejected one, because
+ * `pickLeadOwner` would never read it and nobody would ever find out. The check
+ * is inside the transaction so a service switched to a non-lead archetype
+ * mid-write cannot slip through.
+ *
+ * Removing someone from a service does NOT touch leads they already own: an
+ * owner is a person a family has spoken to, not a routing key. It only stops
+ * them receiving new ones.
+ */
+export async function setStaffLeadServices(
+  staffId: number,
+  serviceIds: number[],
+): Promise<{ ok: true } | { ok: false; reason: "not_found" | "not_lead_service" }> {
+  const unique = [...new Set(serviceIds)];
+
+  return getDb().transaction(async (tx) => {
+    const [staff] = await tx
+      .select({ id: staffAccounts.id })
+      .from(staffAccounts)
+      .where(eq(staffAccounts.id, staffId))
+      .limit(1);
+    if (!staff) return { ok: false as const, reason: "not_found" as const };
+
+    if (unique.length > 0) {
+      const valid = await tx
+        .select({ id: services.id })
+        .from(services)
+        .where(and(inArray(services.id, unique), eq(services.archetype, "lead")));
+      if (valid.length !== unique.length) {
+        return { ok: false as const, reason: "not_lead_service" as const };
+      }
+    }
+
+    await tx.delete(staffServices).where(eq(staffServices.staffId, staffId));
+    if (unique.length > 0) {
+      await tx
+        .insert(staffServices)
+        .values(unique.map((serviceId) => ({ staffId, serviceId })));
+    }
+
+    return { ok: true as const };
+  });
 }

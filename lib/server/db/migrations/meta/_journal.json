@@ -43,6 +43,13 @@
       "when": 1784264102795,
       "tag": "0005_nosy_human_fly",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1784291405356,
+      "tag": "0006_fair_namora",
+      "breakpoints": true
     }
   ]
 }

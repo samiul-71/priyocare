@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { requireStaffPage } from "@/lib/server/auth/dal";
-import { listStaff } from "@/lib/server/office/queries";
+import { listLeadServices, listStaff, listStaffServices } from "@/lib/server/office/queries";
 import { StaffPasswordReset } from "@/components/office/StaffPasswordReset";
+import { StaffLeadServices } from "@/components/office/StaffLeadServices";
 
 export const metadata: Metadata = { title: "Staff" };
 export const dynamic = "force-dynamic";
@@ -22,7 +23,24 @@ export const dynamic = "force-dynamic";
  */
 export default async function StaffPage() {
   const actor = await requireStaffPage("admin");
-  const staff = await listStaff();
+  const [staff, leadServices, staffServiceRows] = await Promise.all([
+    listStaff(),
+    listLeadServices(),
+    listStaffServices(),
+  ]);
+
+  const servicesByStaff = new Map<number, number[]>();
+  for (const row of staffServiceRows) {
+    servicesByStaff.set(row.staffId, [
+      ...(servicesByStaff.get(row.staffId) ?? []),
+      row.serviceId,
+    ]);
+  }
+
+  // An empty rota is not a neutral state: every new enquiry lands "Unassigned"
+  // and waits for someone to notice it. Say so, rather than letting a grid of
+  // empty checkboxes read as "configured".
+  const nobodyOnRota = staff.length > 0 && staffServiceRows.length === 0;
 
   return (
     <div>
@@ -32,6 +50,18 @@ export default async function StaffPage() {
         <code className="rounded bg-surface-alt px-1 text-xs">npm run db:create-staff</code> — there
         is no self-registration (§10.1).
       </p>
+
+      {nobodyOnRota && (
+        <p
+          role="status"
+          className="mb-5 max-w-2xl rounded-md border border-border bg-surface-alt p-3 text-sm text-navy"
+        >
+          <span aria-hidden="true">◑ </span>
+          Nobody is on a lead rota, so every new enquiry lands{" "}
+          <strong>Unassigned</strong> and waits to be picked up. Tick a lead service below to put
+          someone in the rotation.
+        </p>
+      )}
 
       {staff.length === 0 ? (
         <p className="rounded-md border border-border bg-surface-alt p-4 text-text-muted">
@@ -46,6 +76,7 @@ export default async function StaffPage() {
                 <th className="py-2 font-medium">Role</th>
                 <th className="py-2 font-medium">Status</th>
                 <th className="py-2 font-medium">Password</th>
+                <th className="py-2 font-medium">Lead rota</th>
                 <th className="py-2" />
               </tr>
             </thead>
@@ -78,6 +109,22 @@ export default async function StaffPage() {
                         <span aria-hidden="true">✓ </span>
                         Theirs alone
                       </span>
+                    )}
+                  </td>
+                  <td className="py-3">
+                    {s.isActive ? (
+                      <StaffLeadServices
+                        staffId={s.id}
+                        name={s.name}
+                        leadServices={leadServices}
+                        selected={servicesByStaff.get(s.id) ?? []}
+                        canEdit
+                      />
+                    ) : (
+                      // A deactivated account is already excluded from the
+                      // rotation by the query; offering the checkboxes would
+                      // imply otherwise.
+                      <span className="text-xs text-text-muted">Not in rotation</span>
                     )}
                   </td>
                   <td className="py-3 text-right">

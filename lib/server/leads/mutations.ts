@@ -4,6 +4,7 @@ import { and, count, eq, gte, inArray, lt, ne, sql } from "drizzle-orm";
 import { getDb } from "../db";
 import { leadActivities, leads, services } from "../db/schema";
 import { formatLeadCode } from "../../shared/booking-code";
+import { pickLeadOwner } from "./assignment";
 import {
   CLOSED_STAGES,
   DORMANCY_DAYS,
@@ -43,9 +44,12 @@ export class InvalidStageChangeError extends Error {
  *
  * Lands at stage `new` with a follow-up date already set — an enquiry nobody
  * has claimed still surfaces tomorrow rather than resting at `new` forever.
- * `ownerId` stays null: there is no assignment rule in the PRD to implement, so
- * the Kanban shows "Unassigned" honestly rather than inventing a round-robin
- * (tracked as an open question).
+ *
+ * The owner is picked by **round-robin within the service** (Ops decision,
+ * 2026-07-17 — see `assignment.ts` for why it is not by zone). When nobody is
+ * mapped to the service, `ownerId` stays null and the Kanban shows "Unassigned"
+ * honestly, exactly as it did before there was a rota — the follow-up date is
+ * what stops it going silent either way.
  *
  * Duplicates are NOT merged here (§11) — they are surfaced to the owner by the
  * Kanban query, because two enquiries from one phone can be two real people
@@ -71,6 +75,10 @@ export async function createLead(input: CreateLeadInput, now: Date = new Date())
       .from(leads)
       .where(gte(leads.createdAt, startOfDay));
 
+    // Inside the transaction, so the rotation reads the same committed state the
+    // insert writes into.
+    const ownerId = await pickLeadOwner(tx, input.serviceId);
+
     const [lead] = await tx
       .insert(leads)
       .values({
@@ -84,12 +92,14 @@ export async function createLead(input: CreateLeadInput, now: Date = new Date())
         budgetRange: input.budgetRange,
         documents: input.documents,
         stage: "new",
+        ownerId,
         nextActionAt: initialNextActionAt(now),
       })
       .returning({
         id: leads.id,
         leadCode: leads.leadCode,
         stage: leads.stage,
+        ownerId: leads.ownerId,
         nextActionAt: leads.nextActionAt,
       });
 

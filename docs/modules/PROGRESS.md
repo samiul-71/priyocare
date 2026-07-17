@@ -26,10 +26,23 @@ Legend: ✅ complete · 🚧 in progress · ⬜ not started
 | — | Boot-time env validation | ✅ | `023e266`, `39e3dd5` | A missing `JWT_SECRET` fails at boot, naming it — instead of silently signing everyone out. `39e3dd5` is the fix that made that true: `023e266` only threw, and Next catches a throwing `register()` and keeps serving 500s |
 | — | Reject a caregiver with a reason | ✅ | `4f71b97` | `rejected` was set by nothing; suspend was discarding its reason. Both recorded now, with reopen |
 | — | Caregiver a11y pass (+ `db:seed-e2e`) | ✅ | `6ed1509` | The last unscanned surface; fixture goes through the real onboarding gate |
+| — | Lead owner assignment (round-robin by service) | ✅ | _pending_ | Closes the last open Ops decision. `staff_services` rota + `/office/staff` grid; empty rota still lands Unassigned |
 
 ## Next up
 
 **All nine modules are built**, and every credential in the system now has a forced first change and a working reset route. What remains is in the [TODO](#todo--everything-still-outstanding) — mostly waiting on an external provider (Redis, storage, SMS, email, the payment gateway's webhook shape), plus a handful of small independent code items and §10.7's pentest. Nothing there blocks anything else.
+
+### Lead owner assignment — what's full vs. deferred
+
+**Asked for as "round-robin by zone"; built as round-robin by service, because leads have no zone and should not have one.** Zones (Mirpur, Gulshan…) are hyper-local delivery areas whose only job is sending a caregiver to a house. No lead involves a house: the three lead-archetype services are **health insurance** (phone and paperwork), **medical tourism** (the patient flies abroad — the lead carries a `destination_pref`) and **mental-health counselling** (off-platform). `leads` has no zone column, the enquiry form deliberately never asks for an area, and adding one would mean asking a worried family for their address before anyone has spoken to them — a conversion cost for a field that is noise on two of the three services. The service **is** the specialism: selling insurance, counselling a family in crisis and coordinating a hospital transfer abroad are different jobs. Confirmed with Ops 2026-07-17 before building.
+
+- **Full:** `staff_services` (a staff↔lead-service rota, migration `0006`), `pickLeadOwner` inside `createLead`'s transaction, and a rota grid on `/office/staff` (admin-only; the action refuses `ops` regardless of the UI hiding it). 9 unit tests on the ordering.
+- **Least-recently-assigned, not a stored pointer.** A "next up" counter is a second source of truth that drifts and needs resetting whenever staff join, leave or are deactivated — and nothing ever remembers to. Ordering by "who has not had one for longest" derives the rotation from rows that already exist, and self-heals: a new joiner has never been assigned, so they go first; a deactivated account simply stops appearing.
+- **Scoped per service.** Someone on both insurance and tourism has a separate rotation in each — a busy tourism week must not push them to the back of the insurance queue.
+- **An empty rota is still Unassigned**, exactly as before this existed. An enquiry is never dropped for want of a rota, and `/office/staff` says so out loud rather than letting a grid of empty checkboxes read as configured.
+- **Verified live** against Postgres through the real `createLead`: three staff, four leads → owners rotated `7 → 8 → 9 → 7`; with the rota emptied, the next lead landed `null`. The unit tests only cover the ordering — the `LEFT JOIN`/`max()` that feeds it is the part they cannot reach.
+- **Deferred — concurrency drift.** Two leads for one service created in the same instant can both see the same "least recent" staff and both land on them, since neither transaction sees the other's uncommitted insert. That is fairness drift of one lead, not a lost lead, and it self-corrects (that person is now most-recent, so they go last next time). Serialising it would mean locking staff rows that *logins* read — a much worse trade for a handful of leads a day.
+- **Deferred — removing someone from a rota does not reassign their open leads.** An owner is a person a family has already spoken to, not a routing key. Taking them off only stops new leads arriving.
 
 ### Caregiver a11y pass — what's full vs. deferred
 
@@ -131,7 +144,7 @@ Closes the blocking gap module 07 surfaced: no shipped path created a caregiver,
 - **Full:** pure pipeline logic (`lib/shared/leads.ts` — overdue, dormancy, stage rules, Kanban ordering) with 20 unit tests; `POST /api/v1/leads` (public, rate-limited 5/10min, **archetype-gated** → 422 for a non-`lead` service); `PATCH /api/v1/office/leads/{id}` (staff-gated; stage change + activity in one transaction → 409 on reopen/missing lost reason, 404 unknown, 422 empty patch); `/enquiry/[service]` public form (lead services only; a non-lead slug 404s); `/office/leads` Kanban with overdue pinning, duplicate-phone surfacing, and a dormant shelf; `sweepDormantLeads` for the §12.1 job.
 - **Design notes:** stage rules are permissive about ORDER (Ops skips steps; a board that fights them gets worked around) but strict about the two moves that lose information — reopening a closed lead, and marking lost without a reason. The Kanban uses a `<select>` + button, not drag-and-drop: dragging is the part of a Kanban that fails keyboard and screen-reader users, and the board's job is making the next action obvious. Duplicates are computed at query time, never stored — a repeat caller is a fact about current data, and a stored flag goes stale the moment the other lead closes.
 - **Deferred:** **document upload** — `documents` accepts a storage KEY, never a caller-supplied URL, and the form submits none until private storage + signed access exist (§11, §19); a medical report must not be attachable before it has somewhere private to land. **`sweepDormantLeads` is not scheduled** — it is a plain function until BullMQ/Redis is on the VPS (§3.4). **Mental Health** enquiries are captured (S-3) but the service stays off-platform until Phase 3 (§10.6) — crisis protocol + note encryption first.
-- **Open question raised:** Flow C says a new lead lands "+ owner", but no PRD rule says WHO. Rather than invent a round-robin, `ownerId` stays null and the Kanban shows "Unassigned" — with `next_action_at` set to +24h, so an unclaimed lead surfaces as overdue tomorrow instead of resting at `new` forever. Needs an assignment rule.
+- **Open question raised, and since answered (2026-07-17): round-robin by service.** Flow C said a new lead lands "+ owner" without saying WHO, so this shipped with `ownerId` null and an honest "Unassigned" rather than an invented rule. Now implemented — see *Lead owner assignment* above. The fallback it shipped with is still the fallback: nobody on the rota means Unassigned with `next_action_at` +24h.
 
 ### Page auth guards — what's full vs. deferred
 
@@ -164,7 +177,6 @@ The single list of what is left. Each module's own "full vs. deferred" section a
 
 ### 1. Needs a decision from you (blocks nobody today, but launch waits on it)
 
-- [ ] **Lead owner assignment rule.** Flow C says a new lead lands "+ owner" but no rule says who — round-robin, by service, by shift? Built as: `owner_id` null, board shows "Unassigned", `next_action_at` +24h so nothing goes silent. Needs an Ops answer. (module 06)
 - [ ] **The `postgres` superuser password is still the default `postgres`** on the local machine. Contained (`pg_hba` allows localhost only, and the app uses its own `priyocare` role) but worth changing.
 - [ ] **Mental-health crisis protocol + note encryption**, before any session goes on-platform (§10.6, Phase 3). Enquiries are captured today; the service stays off-platform. (module 06)
 - [ ] **Document-storage retention** for lead attachments and caregiver files (§14).

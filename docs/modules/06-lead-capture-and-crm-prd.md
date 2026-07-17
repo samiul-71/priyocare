@@ -146,7 +146,7 @@ A lead quiet for 30 days auto-moves to `dormant` and is surfaced weekly for a re
 
 - [ ] Mental-health crisis protocol + note encryption before any session (§10.6).
 - [ ] Document-storage retention for lead attachments.
-- [ ] **Lead owner assignment rule.** Flow C says a new lead lands "+ owner", but nothing here says who — round-robin, by service, by shift? As built, `owner_id` is null and the board shows "Unassigned"; `next_action_at` is set to +24h so an unclaimed lead still surfaces as overdue rather than resting at `new`. Needs an Ops decision before launch.
+- [x] **Lead owner assignment rule — answered 2026-07-17: round-robin by service.** Asked for as "by zone"; leads have no zone and should not have one, because zones exist to send a caregiver to a house and no lead-archetype service (insurance, medical tourism, mental health) involves a house. The service is the specialism. Implemented as a `staff_services` rota picked least-recently-assigned; with nobody on a rota a lead still lands "Unassigned" with `next_action_at` +24h, exactly as before. See PROGRESS.md.
 
 ---
 

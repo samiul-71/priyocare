@@ -122,3 +122,19 @@ export const updateCaregiverSchema = z
     message: "Nothing to update.",
   });
 export type UpdateCaregiverInput = z.infer<typeof updateCaregiverSchema>;
+
+/**
+ * Which lead services a staff member is on the rota for (§9).
+ *
+ * The archetype check is NOT here — it needs the database (a service's
+ * archetype can change) and lives in `setStaffLeadServices`, inside the
+ * transaction that writes the rows. This only checks shape.
+ *
+ * An empty list is valid and meaningful: it takes someone off every rota, which
+ * is what you do the day before someone leaves.
+ */
+export const staffLeadServicesSchema = z.object({
+  staffId: z.coerce.number().int().positive(),
+  serviceIds: z.array(z.coerce.number().int().positive()).max(20),
+});
+export type StaffLeadServicesInput = z.infer<typeof staffLeadServicesSchema>;

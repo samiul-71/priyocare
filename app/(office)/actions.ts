@@ -13,6 +13,7 @@ import {
   transitionVerificationStep,
   activateCaregiver,
   updateCaregiverFile,
+  setStaffLeadServices,
 } from "@/lib/server/office/mutations";
 import {
   InvalidStageChangeError,
@@ -26,6 +27,7 @@ import {
   dispatchSchema,
   phoneBookingSchema,
   rejectCaregiverSchema,
+  staffLeadServicesSchema,
   updateCaregiverSchema,
   verifyStepSchema,
 } from "@/lib/shared/office-schemas";
@@ -347,4 +349,42 @@ export async function resetStaffPasswordAction(
  */
 export async function signOutStaffAction(): Promise<void> {
   await clearPageSessionCookie();
+}
+
+/**
+ * Set which lead services a staff member is on the rota for (§9). Admin-only:
+ * this decides who gets the next enquiry, which is a staffing decision, not a
+ * case-work one.
+ *
+ * The page hides the control from `ops`; this refuses them regardless. A UI
+ * hide is a courtesy on top of a gate, never the gate.
+ */
+export async function setStaffLeadServicesAction(
+  staffId: number,
+  serviceIds: number[],
+): Promise<ActionResult> {
+  const actor = await getStaffActor();
+  if (!actor) return SESSION_EXPIRED;
+  if (actor.role !== "admin") {
+    return { ok: false, error: "Only an admin can change who handles lead services." };
+  }
+
+  const parsed = staffLeadServicesSchema.safeParse({ staffId, serviceIds });
+  if (!parsed.success) {
+    return { ok: false, error: "That is not a valid set of services." };
+  }
+
+  const result = await setStaffLeadServices(parsed.data.staffId, parsed.data.serviceIds);
+  if (result.ok) {
+    revalidatePath("/office/staff");
+    return { ok: true };
+  }
+
+  return {
+    ok: false,
+    error:
+      result.reason === "not_lead_service"
+        ? "Only lead services (insurance, medical tourism, mental health) have a rota."
+        : "Staff account not found.",
+  };
 }
