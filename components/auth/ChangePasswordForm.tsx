@@ -18,6 +18,12 @@ export function ChangePasswordForm({ returnTo }: { returnTo: string }) {
   const [errors, setErrors] = useState<Record<string, string[]>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Masked by default, but revealable. The one error people cannot get past on
+  // this screen is "same as the current one", and it is invisible while both
+  // boxes show dots: a password manager that fills BOTH fields with the saved
+  // sign-in credential, or a typo'd repeat, looks identical to a correct entry.
+  // Showing the characters is what lets them see the two are the same and fix it.
+  const [reveal, setReveal] = useState(false);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -60,15 +66,27 @@ export function ChangePasswordForm({ returnTo }: { returnTo: string }) {
 
   const fieldClass = "mt-1 w-full rounded-md border border-border px-3 py-2 text-sm";
 
+  const inputType = reveal ? "text" : "password";
+
   return (
     <form onSubmit={onSubmit} noValidate>
-      <label className="block text-sm font-medium" htmlFor="currentPassword">
-        Current password
-      </label>
+      <div className="flex items-baseline justify-between">
+        <label className="block text-sm font-medium" htmlFor="currentPassword">
+          Current password
+        </label>
+        <button
+          type="button"
+          onClick={() => setReveal((v) => !v)}
+          aria-pressed={reveal}
+          className="text-xs font-medium text-navy underline"
+        >
+          {reveal ? "Hide" : "Show"}
+        </button>
+      </div>
       <input
         id="currentPassword"
         name="currentPassword"
-        type="password"
+        type={inputType}
         autoComplete="current-password"
         autoFocus
         className={fieldClass}
@@ -82,14 +100,14 @@ export function ChangePasswordForm({ returnTo }: { returnTo: string }) {
       <input
         id="newPassword"
         name="newPassword"
-        type="password"
+        type={inputType}
         autoComplete="new-password"
         className={fieldClass}
         aria-describedby="newPassword-error newPassword-help"
       />
       <p id="newPassword-help" className="mt-1 text-xs text-text-muted">
-        At least 12 characters. Length is what matters — a passphrase of a few ordinary words beats
-        a short one with symbols in it.
+        At least 12 characters, and different from the one you just signed in with. Length is what
+        matters — a passphrase of a few ordinary words beats a short one with symbols in it.
       </p>
       {err("newPassword")}
 

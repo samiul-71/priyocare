@@ -135,7 +135,11 @@ export const changePasswordSchema = z
     newPassword: newStaffPasswordSchema,
   })
   .refine((v) => v.currentPassword !== v.newPassword, {
-    message: "The new password must be different from the current one",
+    // Names what happened, not a rule: on the forced first change this fires
+    // when both boxes hold the sign-in password — a manager that filled both,
+    // or the same value typed twice — and "must be different" reads as a demand
+    // rather than "these two are identical, and here is which".
+    message: "This is the same as your current password — enter a different new one",
     path: ["newPassword"],
   });
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
