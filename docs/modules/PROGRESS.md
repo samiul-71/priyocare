@@ -25,7 +25,7 @@ Legend: ✅ complete · 🚧 in progress · ⬜ not started
 | — | Staff passwords: forced change, change, admin reset | ✅ | `352a7e9` | Closes the same gap for the accounts with the most access; `/office/staff` |
 | — | Boot-time env validation | ✅ | `023e266` | A missing `JWT_SECRET` fails at boot, naming it — instead of silently signing everyone out |
 | — | Reject a caregiver with a reason | ✅ | `4f71b97` | `rejected` was set by nothing; suspend was discarding its reason. Both recorded now, with reopen |
-| — | Caregiver a11y pass (+ `db:seed-e2e`) | ✅ | _pinned below_ | The last unscanned surface; fixture goes through the real onboarding gate |
+| — | Caregiver a11y pass (+ `db:seed-e2e`) | ✅ | `6ed1509` | The last unscanned surface; fixture goes through the real onboarding gate |
 
 ## Next up
 
