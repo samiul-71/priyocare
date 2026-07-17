@@ -128,6 +128,8 @@ npm run dev         # dev server
 npm run build       # production build
 npm run start       # serve production build
 npm run lint        # eslint + eslint-plugin-boundaries (cross-actor imports are errors)
+npm run typecheck   # tsc --noEmit over the whole repo, tests included — `next build` only
+                    # checks what it bundles, so without this a broken test types silently
 npm run test:unit   # node:test unit tests (e.g. the Bangla-Unicode rule)
 npm run test:a11y   # playwright: axe-core a11y gate + the page-guard gate
 npm run db:generate # drizzle-kit: regenerate migration SQL from the schema (offline)
