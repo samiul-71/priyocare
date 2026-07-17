@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { getPageSession } from "@/lib/server/auth/dal";
+import { getCaregiverActor } from "@/lib/server/auth/dal";
 import { CaregiverLoginForm } from "@/components/auth/CaregiverLoginForm";
 import { safeReturnPath } from "@/lib/shared/return-path";
 
@@ -22,8 +22,12 @@ export default async function CaregiverLoginPage({
   const { next } = await searchParams;
   const returnTo = safeReturnPath(next, "/caregiver") ?? "/caregiver";
 
-  const session = await getPageSession();
-  if (session?.st === "caregiver") redirect(returnTo);
+  // Same authority as `requireCaregiverPage`, not the cookie-only check — a
+  // cookie it refuses (suspended, or `iat` older than `pin_changed_at`) would
+  // otherwise ping-pong her between this page and /caregiver forever. See the
+  // staff login page for the full shape of that loop.
+  const caregiver = await getCaregiverActor();
+  if (caregiver) redirect(returnTo);
 
   return (
     <>

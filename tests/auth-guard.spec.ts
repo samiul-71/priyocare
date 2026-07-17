@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { SignJWT } from "jose";
 
 /**
  * Page-guard gate. Every /office and /caregiver page must be unreachable
@@ -66,6 +67,72 @@ test("guard: login screens render instead of looping", async ({ page }) => {
 
   await page.goto("/caregiver/login");
   await expect(page).toHaveURL(/\/caregiver\/login$/);
+});
+
+/**
+ * A cookie the guard REFUSES must still leave the login form reachable.
+ *
+ * The regression: the login pages asked `getPageSession` (cookie only) while
+ * the guards asked `getStaffActor` (cookie AND the row). A cookie both signed
+ * and unexpired can still be refused by the second check — the account was
+ * suspended, `iat` predates `password_changed_at` after a reset, or the row is
+ * simply gone. The two seams then disagreed forever: login saw "signed in" and
+ * sent her to /office, /office saw "not signed in" and sent her back, and
+ * Chromium gave up with ERR_TOO_MANY_REDIRECTS. She was locked out by the one
+ * page that could have replaced the bad cookie, and clearing cookies by hand
+ * was the only way back in.
+ *
+ * A cookie for a staff id that cannot exist reproduces that refusal without a
+ * seeded account: it proves nothing and grants nothing, so it is no backdoor.
+ * Needs the database the guard reads — without it the guard throws instead of
+ * refusing, which is a different test.
+ */
+test.describe("a refused-but-valid cookie", () => {
+  const SECRET = process.env.JWT_SECRET;
+  test.skip(
+    !SECRET || !process.env.DATABASE_URL,
+    "Needs JWT_SECRET and a database — the guard must reach the row to refuse it.",
+  );
+
+  async function forge(subjectType: "staff" | "caregiver") {
+    const now = Math.floor(Date.now() / 1000);
+    return new SignJWT({ st: subjectType, ...(subjectType === "staff" ? { role: "admin" } : {}) })
+      .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+      .setSubject("999999") // no such account — the guard reads the row and refuses
+      .setIssuer("priyocare")
+      .setAudience("priyocare:page-session")
+      .setIssuedAt(now)
+      .setExpirationTime(now + 3600)
+      .sign(new TextEncoder().encode(SECRET!));
+  }
+
+  test("does not lock staff out of /office/login", async ({ page, context }) => {
+    await context.addCookies([
+      { name: "pc_session", value: await forge("staff"), url: "http://localhost:3123" },
+    ]);
+
+    // Would throw ERR_TOO_MANY_REDIRECTS before the fix.
+    await page.goto("/office/login");
+    await expect(page).toHaveURL(/\/office\/login$/);
+    await expect(page.getByRole("heading", { name: "Office sign in" })).toBeVisible();
+
+    // And the guard still bounces her here rather than serving the panel.
+    await page.goto("/office");
+    await expect(page).toHaveURL(/\/office\/login\?next=/);
+    await expect(page.getByRole("heading", { name: "Office sign in" })).toBeVisible();
+  });
+
+  test("does not lock a caregiver out of /caregiver/login", async ({ page, context }) => {
+    await context.addCookies([
+      { name: "pc_session", value: await forge("caregiver"), url: "http://localhost:3123" },
+    ]);
+
+    await page.goto("/caregiver/login");
+    await expect(page).toHaveURL(/\/caregiver\/login$/);
+
+    await page.goto("/caregiver");
+    await expect(page).toHaveURL(/\/caregiver\/login\?next=/);
+  });
 });
 
 test("customer booking stays public — guest booking is the point (Flow A)", async ({ page }) => {

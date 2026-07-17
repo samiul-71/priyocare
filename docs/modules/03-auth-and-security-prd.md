@@ -209,4 +209,6 @@ Page guards were deferred out of this module and built once modules 04/05 had sh
 
 Login screens live in an `(auth)` route group, outside the guarded shells — inside them, an anonymous visitor would be redirected to a login page that redirects them again.
 
+**5. A login screen judges the session by the same authority as the guard.** Sitting outside the shell is only half of "does not loop". The login pages also skip their form when you are already signed in, and that check has to agree with the guard pointing at them. It did not: they asked `getPageSession` (cookie only) while `requireStaffPage` asks `getStaffActor` (cookie **and** the row). A cookie can pass the first and fail the second — suspended account, or `iat` older than `password_changed_at` after a reset — and the two seams then redirected at each other forever, `ERR_TOO_MANY_REDIRECTS`, locking the user out of the one page that would have replaced the stale cookie. Both login pages now use the DB-backed actor helpers; `getPageSession` is for checks where being wrong costs nothing. Regression test: `tests/auth-guard.spec.ts` › "a refused-but-valid cookie".
+
 **Known gap:** the office forms still hold the Bearer pair in `localStorage`, which XSS can read and the cookie cannot. Closing it means moving office mutations to cookie-authorised Server Actions (module 09). Tracked in `PROGRESS.md`.

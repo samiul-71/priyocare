@@ -66,7 +66,17 @@ export async function clearPageSessionCookie(): Promise<void> {
   cookieStore.delete(SESSION_COOKIE);
 }
 
-/** Verified cookie claims, or null. Optimistic — no database read. */
+/**
+ * Verified cookie claims, or null. Optimistic — no database read.
+ *
+ * NOT for deciding "already signed in, skip the login form". A cookie that
+ * verifies here can still be refused by `getStaffActor`/`getCaregiverActor`
+ * (suspended account, or `iat` older than the last credential change), and a
+ * login page that bounces on this check alone redirects into a guard that
+ * redirects straight back — an infinite loop, on the one page that could have
+ * fixed the stale cookie. The login pages call the actor helpers instead; use
+ * this only where being wrong costs nothing.
+ */
 export const getPageSession = cache(async (): Promise<PageSessionClaims | null> => {
   const cookieStore = await cookies();
   return verifyPageSession(cookieStore.get(SESSION_COOKIE)?.value);
