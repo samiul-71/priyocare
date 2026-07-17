@@ -24,7 +24,7 @@ Legend: ✅ complete · 🚧 in progress · ⬜ not started
 | — | PIN reset (Ops + self-service OTP) | ✅ | `56475f8` | `/caregiver/forgot-pin` + Ops reset; degrades honestly with no SMS provider |
 | — | Staff passwords: forced change, change, admin reset | ✅ | `352a7e9` | Closes the same gap for the accounts with the most access; `/office/staff` |
 | — | Boot-time env validation | ✅ | `023e266` | A missing `JWT_SECRET` fails at boot, naming it — instead of silently signing everyone out |
-| — | Reject a caregiver with a reason | ✅ | _pinned below_ | `rejected` was set by nothing; suspend was discarding its reason. Both recorded now, with reopen |
+| — | Reject a caregiver with a reason | ✅ | `4f71b97` | `rejected` was set by nothing; suspend was discarding its reason. Both recorded now, with reopen |
 
 ## Next up
 
