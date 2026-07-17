@@ -95,9 +95,9 @@ export default async function CatalogPage() {
     <div className="max-w-3xl">
       <h1 className="font-display text-2xl font-bold text-navy">Catalogue</h1>
       <p className="mt-1 text-text-muted">
-        Read-only preview of the seeded catalogue. CRUD writes land with the API
-        (module 09); once live, adding a service, variant, or price is an Ops
-        task here — <strong>never a deploy</strong> (PRD §7.1).
+        The service catalogue — services, nursing procedures, prices, and zones.
+        This is a read-only view; catalogue changes aren&rsquo;t editable in the
+        panel yet.
       </p>
       <p className="mt-1 text-xs text-text-muted">
         Zones: <span lang="en">{ZONES.join(" · ")}</span>
