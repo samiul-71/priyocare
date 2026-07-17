@@ -26,7 +26,7 @@ Legend: ✅ complete · 🚧 in progress · ⬜ not started
 | — | Boot-time env validation | ✅ | `023e266`, `39e3dd5` | A missing `JWT_SECRET` fails at boot, naming it — instead of silently signing everyone out. `39e3dd5` is the fix that made that true: `023e266` only threw, and Next catches a throwing `register()` and keeps serving 500s |
 | — | Reject a caregiver with a reason | ✅ | `4f71b97` | `rejected` was set by nothing; suspend was discarding its reason. Both recorded now, with reopen |
 | — | Caregiver a11y pass (+ `db:seed-e2e`) | ✅ | `6ed1509` | The last unscanned surface; fixture goes through the real onboarding gate |
-| — | Lead owner assignment (round-robin by service) | ✅ | _pending_ | Closes the last open Ops decision. `staff_services` rota + `/office/staff` grid; empty rota still lands Unassigned |
+| — | Lead owner assignment (round-robin by service) | ✅ | `5cec38c` | Closes the last open Ops decision. `staff_services` rota + `/office/staff` grid; empty rota still lands Unassigned |
 
 ## Next up
 
