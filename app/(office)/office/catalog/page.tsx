@@ -1,125 +1,47 @@
 import type { Metadata } from "next";
 import { requireStaffPage } from "@/lib/server/auth/dal";
-import {
-  NURSING_VARIANTS,
-  SERVICE_SEED,
-  ZONES,
-  type ServiceSeed,
-} from "@/lib/shared/catalogue-seed";
+import { getCatalogue } from "@/lib/server/office/catalogue";
+import { ServicesSection } from "@/components/office/catalog/ServicesSection";
+import { VariantsSection } from "@/components/office/catalog/VariantsSection";
+import { ZonesSection } from "@/components/office/catalog/ZonesSection";
 
 export const metadata: Metadata = { title: "Catalogue" };
+export const dynamic = "force-dynamic";
 
-const ARCHETYPE_LABEL = {
-  visit: "Visit — slot → dispatch → check-in",
-  placement: "Placement — subscription + continuity",
-  lead: "Lead — CRM pipeline (no booking)",
-} as const;
-
-const ARCHETYPE_ORDER = ["visit", "placement", "lead"] as const;
-
-function ActiveTag({ active }: { active: boolean }) {
-  return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
-        active ? "bg-teal-50 text-teal-900" : "bg-surface-alt text-text-muted"
-      }`}
-    >
-      <span aria-hidden="true">{active ? "●" : "○"}</span>
-      {active ? "Active" : "Inactive"}
-    </span>
-  );
-}
-
-function ServiceRow({ service }: { service: ServiceSeed }) {
-  return (
-    <li className="flex flex-col gap-1 border-b border-border py-3 last:border-0">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="font-semibold text-navy" lang="bn">
-          {service.nameBn}
-        </span>
-        <span className="text-text-muted" lang="en">
-          {service.nameEn}
-        </span>
-        <ActiveTag active={service.isActive} />
-      </div>
-      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-text-muted">
-        <span>slug: {service.slug}</span>
-        {service.requiredSkill && <span>skill: {service.requiredSkill}</span>}
-        {service.requiresPrescription && <span>prescription required</span>}
-        {service.windowStart && (
-          <span>
-            window: {service.windowStart}–{service.windowEnd}
-          </span>
-        )}
-      </div>
-
-      {/* Nursing shows its 15 variants — variants, not 15 services (PRD §3.3). */}
-      {service.slug === "nursing" && (
-        <table className="mt-2 w-full max-w-xl border-collapse text-sm">
-          <caption className="sr-only">Nursing procedure variants and prices</caption>
-          <thead>
-            <tr className="text-left text-text-muted">
-              <th scope="col" className="py-1 font-medium">
-                Procedure
-              </th>
-              <th scope="col" className="py-1 text-right font-medium">
-                Price (BDT)
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {NURSING_VARIANTS.map((v) => (
-              <tr key={v.nameEn} className="border-t border-border">
-                <td className="py-1">
-                  <span lang="bn">{v.nameBn}</span>{" "}
-                  <span className="text-text-muted" lang="en">
-                    ({v.nameEn})
-                  </span>
-                </td>
-                <td className="tabular py-1 text-right">
-                  {v.priceBdt.toLocaleString("en-US")}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </li>
-  );
-}
-
+/**
+ * Service catalogue (§7.1). Reads the LIVE tables (not the seed constants), so
+ * what it shows is what a booking will price against.
+ *
+ * Editing is ADMIN ONLY — prices here feed live booking pricing, the
+ * highest-trust surface in the panel — while every staffer can view. Each
+ * section hides its controls when `canEdit` is false; the actions re-check the
+ * role regardless, so the hide is a courtesy on top of the gate.
+ */
 export default async function CatalogPage() {
-  await requireStaffPage();
+  const staff = await requireStaffPage();
+  const canEdit = staff.role === "admin";
+  const { services, variants, zones, zonePrices } = await getCatalogue();
 
   return (
-    <div className="max-w-3xl">
-      <h1 className="font-display text-2xl font-bold text-navy">Catalogue</h1>
-      <p className="mt-1 text-text-muted">
-        The service catalogue — services, nursing procedures, prices, and zones.
-        This is a read-only view; catalogue changes aren&rsquo;t editable in the
-        panel yet.
-      </p>
-      <p className="mt-1 text-xs text-text-muted">
-        Zones: <span lang="en">{ZONES.join(" · ")}</span>
-      </p>
+    <div className="flex max-w-4xl flex-col gap-5">
+      <div>
+        <h1 className="font-display text-2xl font-bold text-navy">Catalogue</h1>
+        <p className="mt-1 text-text-muted">
+          {canEdit
+            ? "Add and edit services, nursing procedures, prices, and zones. Changes are live — a new price applies to the next booking."
+            : "The service catalogue — services, nursing procedures, prices, and zones. Read-only; ask an admin to make changes."}
+        </p>
+      </div>
 
-      {ARCHETYPE_ORDER.map((archetype) => {
-        const items = SERVICE_SEED.filter((s) => s.archetype === archetype).sort(
-          (a, b) => a.sortOrder - b.sortOrder,
-        );
-        return (
-          <section key={archetype} className="mt-6">
-            <h2 className="font-display text-lg font-semibold text-navy">
-              {ARCHETYPE_LABEL[archetype]}
-            </h2>
-            <ul className="mt-1">
-              {items.map((s) => (
-                <ServiceRow key={s.slug} service={s} />
-              ))}
-            </ul>
-          </section>
-        );
-      })}
+      <ServicesSection services={services} canEdit={canEdit} />
+      <VariantsSection
+        services={services}
+        variants={variants}
+        zones={zones}
+        zonePrices={zonePrices}
+        canEdit={canEdit}
+      />
+      <ZonesSection zones={zones} canEdit={canEdit} />
     </div>
   );
 }

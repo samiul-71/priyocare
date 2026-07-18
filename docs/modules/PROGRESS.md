@@ -32,6 +32,18 @@ Legend: ✅ complete · 🚧 in progress · ⬜ not started
 
 **All nine modules are built**, and every credential in the system now has a forced first change and a working reset route. What remains is in the [TODO](#todo--everything-still-outstanding) — mostly waiting on an external provider (Redis, storage, SMS, email, the payment gateway's webhook shape), plus a handful of small independent code items and §10.7's pentest. Nothing there blocks anything else.
 
+### Catalogue CRUD — what's full vs. deferred
+
+`/office/catalog` rendered the **seed constants**, read-only — so it could not reflect a real change and had no way to make one, while PRD §7.1 says adding a service/variant/price is an Ops task in the panel, never a deploy. Now it reads the live tables and edits them.
+
+- **Full:** the page reads `services` / `service_variants` / `variant_zone_prices` / `zones` (not `catalogue-seed.ts`), so what it shows is what a booking prices against. Admins can create/edit/deactivate **services** (all fields; slug locked after create), **nursing procedures** (name, base price, duration, active), **per-zone price overrides** (a blank zone falls back to the base price), and **zones** (add, rename, activate). Three client sections gate every control behind `canEdit`; the eleven Server Actions re-check `admin` regardless. Shared schemas live in `lib/shared/schemas.ts` (module 02 left `createServiceSchema`/`createVariantSchema` there, never wired — now extended and used). 8 schema unit tests + a 16-check live CRUD pass against Postgres.
+- **Admin only — this is the highest-trust surface in the panel.** A variant's price feeds live booking pricing (`createBooking` re-validates against `variant_zone_prices`/the base price), so a bad edit changes what customers are charged. Ops keep the read-only view; only admins get controls, and the actions enforce it independently of the UI.
+- **Nothing is hard-deleted.** A service or variant a booking may reference, or a zone a price hangs off, is deactivated — the customer flows already exclude inactive rows, and deleting would orphan history. "Deactivate" is the delete.
+- **The slug is immutable after create** (verified): it is the stable key URLs and the booking flow use, so renaming the display name is free but the slug is set once. Per-zone prices upsert on the (variant, zone) primary key, so re-saving a zone is an edit, not a duplicate (verified: two saves → one row).
+- **Bangla stays Unicode (§18.1).** Every `*_bn` field runs through `banglaText()` (Zod) on top of the DB CHECK, so Bijoy/Latin bytes that only look Bangla are refused before they reach the column.
+- **Verified:** typecheck + lint clean; 204 unit tests; a 16-check live CRUD pass (create/duplicate-slug/update/immutability, variant + FK guard, per-zone upsert→update→delete, zone rename/toggle, getCatalogue reflecting it all), self-cleaning. **Not yet driven in a browser** as an admin — the forms want one real click-through, but every mutation and guard is proven server-side.
+- **Deferred:** no drag-to-reorder (sortOrder is a number field); no bulk price edit; no per-zone price matrix view (prices are edited per-variant, one zone at a time); descriptions/prep-instructions are single-line inputs, not rich text; and `catalogue-seed.ts` stays as the bootstrap seed for `db:seed`, no longer read by the page.
+
 ### Email provider + staff forgot-password — what's full vs. deferred
 
 The last gap in the staff credential story: a staff member who forgot their password needed an admin to reset it, and if the *sole* admin forgot theirs, recovery was `db:create-staff` on the VPS. This closes it with self-service reset over email.
@@ -262,6 +274,7 @@ Five items raised by Ops. None blocks the others; #4 is largely already built.
 - [x] **Dashboard / analytics** — **built, live-verified, pending commit.** Replaces the `/office` landing for all staff: ops get an operational view (caregivers, complaints, bookings, leads), admins additionally see financials. See the detail section below.
 - [x] **Admin can reset a caregiver's PIN** — **already exists.** Caregivers have no password; `POST /office/caregivers/{id}/pin/reset` (`requireStaff`, so any staff incl. admin) with a Reset button on the verify page, shipped in `56475f8`. Open only if Ops wants it surfaced on the caregiver *list* page too, or restricted to admin-only.
 - [x] **Email provider — Mailtrap SMTP + staff forgot-password** — **built, live-verified (mail delivered to Mailtrap), pending commit.** See the detail section below.
+- [x] **Catalogue CRUD (admin)** — **built, live-verified, pending commit.** `/office/catalog` now reads the live tables and lets admins create/edit/deactivate services, nursing procedures, per-zone prices, and zones; ops keep the read-only view. See the detail section below.
 
 ## Environment (updated — local Postgres now exists)
 
