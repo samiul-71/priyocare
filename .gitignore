@@ -49,3 +49,7 @@ next-env.d.ts
 docs/*
 # ...but keep the committed module PRDs + design system
 !docs/modules/
+
+/.agents
+/.claude
+skills-lock.json
