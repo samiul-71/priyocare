@@ -26,7 +26,7 @@ const USAGE = `
 Usage: npm run db:create-staff -- --email <email> --password <pw> [--name <name>] [--role ops|admin]
 
   --email     required, unique
-  --password  required, min 12 chars. They must change it at first sign-in.
+  --password  required, min 6 chars. They must change it at first sign-in.
   --name      defaults to the email's local part
   --role      "ops" (default) or "admin"
 `;

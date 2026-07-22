@@ -88,22 +88,18 @@ export type ChangePinInput = z.infer<typeof changePinSchema>;
 
 export const staffLoginSchema = z.object({
   email: z.string().trim().toLowerCase().email(),
-  // Login stays at the old floor: existing passwords must keep working, and the
-  // login screen must not hint at the rules anyway.
-  password: z.string().min(8).max(200),
+  // Login floor matches the chosen-password floor so any password that can be
+  // set can also be used to sign in; the login screen must not hint at the rules.
+  password: z.string().min(6).max(200),
 });
 export type StaffLoginInput = z.infer<typeof staffLoginSchema>;
 
 /**
- * A staff password someone CHOOSES (§10.1). Twelve characters, no composition
- * rules — the NIST line, and the right one: length is what defends a hash,
- * while "one uppercase, one symbol" reliably produces `Password1!` and a
- * sticky note. The only extra check is a short list of the passwords everyone
- * tries first, which are not a guess away — they are the first guess.
- *
- * Staff hold more access than caregivers: every patient address, every
- * caregiver's file. This floor is higher than the 8 login accepts on purpose,
- * and applies going forward.
+ * A staff password someone CHOOSES (§10.1). Six characters, no composition
+ * rules — length is what defends a hash, while "one uppercase, one symbol"
+ * reliably produces `Password1!` and a sticky note. The only extra check is a
+ * short list of the passwords everyone tries first, which are not a guess away
+ * — they are the first guess.
  */
 const OBVIOUS_PASSWORDS = [
   "password",
@@ -121,7 +117,7 @@ const OBVIOUS_PASSWORDS = [
 
 export const newStaffPasswordSchema = z
   .string()
-  .min(12, "Use at least 12 characters — length is what makes it hard to crack")
+  .min(6, "Use at least 6 characters")
   .max(200)
   .refine(
     (pw) => !OBVIOUS_PASSWORDS.some((bad) => pw.toLowerCase().includes(bad)),

@@ -103,7 +103,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
         aria-describedby="newPassword-error newPassword-help"
       />
       <p id="newPassword-help" className="mt-1 text-xs text-text-muted">
-        At least 12 characters. Length is what matters — a passphrase of a few ordinary words beats
+        At least 6 characters. Length is what matters — a passphrase of a few ordinary words beats
         a short one with symbols in it.
       </p>
       {errors.newPassword && (

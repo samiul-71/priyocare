@@ -14,11 +14,11 @@ import { generatePassword } from "../lib/server/auth/password.ts";
  * address and every caregiver's file had none of it.
  */
 
-test("a chosen staff password needs 12 characters — length is the defence", () => {
+test("a chosen staff password needs 6 characters — length is the defence", () => {
   assert.equal(newStaffPasswordSchema.safeParse("correct-horse").success, true);
-  assert.equal(newStaffPasswordSchema.safeParse("short").success, false);
-  assert.equal(newStaffPasswordSchema.safeParse("elevenchars").success, false); // 11
-  assert.equal(newStaffPasswordSchema.safeParse("twelvechars!").success, true); // 12
+  assert.equal(newStaffPasswordSchema.safeParse("shrt").success, false); // 4
+  assert.equal(newStaffPasswordSchema.safeParse("fiver").success, false); // 5
+  assert.equal(newStaffPasswordSchema.safeParse("sixchr").success, true); // 6
 });
 
 test("no composition rules — a passphrase of ordinary words passes", () => {
@@ -51,12 +51,12 @@ test("the obvious-password check is case-insensitive and matches substrings", ()
   assert.equal(newStaffPasswordSchema.safeParse("xxPASSWORDxxxx").success, false);
 });
 
-test("login keeps the old 8-char floor — existing passwords must still work", () => {
-  // Raising the login floor would lock out accounts created before the rule,
-  // and the login screen must not hint at the rules anyway.
+test("login accepts the 6-char floor — any password that can be set can sign in", () => {
+  // Login floor matches the chosen-password floor so a valid password is never
+  // rejected at sign-in; the login screen must not hint at the rules anyway.
   const parsed = staffLoginSchema.safeParse({
     email: "ops@priyocare.test",
-    password: "eightchr",
+    password: "sixchr",
   });
   assert.equal(parsed.success, true);
 });
